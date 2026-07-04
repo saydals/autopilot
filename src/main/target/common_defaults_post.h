@@ -331,6 +331,7 @@
 #define RTC6705_SPI_INSTANCE NULL
 #endif
 
+// USE_FLIGHT_PLAN은 common_pre.h에서 USE_GPS 조건부로 자동 정의됨
 #if defined(USE_QUAD_MIXER_ONLY)
 #define MAX_SUPPORTED_MOTORS 4
 #define MAX_SUPPORTED_SERVOS 1
