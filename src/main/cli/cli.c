@@ -6473,30 +6473,6 @@ static void printConfig(const char *cmdName, char *cmdline, bool doDiff)
     }
 #endif
 
-#ifdef USE_FLIGHT_PLAN
-    // dump mission waypoints
-    if ((dumpMask & DUMP_MASTER) || (dumpMask & DUMP_ALL)) {
-        if (missionWpCount > 0) {
-            cliPrintHashLine("waypoints");
-            for (int i = 0; i < missionWpCount; i++) {
-                missionWaypoint_t *wp = &missionWaypoints[i];
-                const float latDeg = (float)wp->latitude / 1e7f;
-                const float lonDeg = (float)wp->longitude / 1e7f;
-                const float altFeet = wp->altitude / 30.48f;
-                const float speedKnots = wp->speed / 51.4444f;
-                const float durationMin = wp->duration / 600.0f;
-                cliPrintLinef("waypoint insert %d %.7f %.7f %.0f %.0f %s %.1f %s",
-                    i,
-                    (double)latDeg, (double)lonDeg,
-                    (double)altFeet, (double)speedKnots,
-                    wpTypeToStr(wp->type),
-                    (double)durationMin,
-                    wpPatternToStr(wp->pattern));
-            }
-        }
-    }
-#endif
-
     // restore configs from copies
     restoreConfigs(0);
 }
