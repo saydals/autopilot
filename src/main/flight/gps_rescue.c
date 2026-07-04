@@ -1433,6 +1433,20 @@ case RESCUE_FLY_HOME:
             if (currentShuttleTrips >= shuttleCount) {
                 rescueState.phase = RESCUE_SHUTTLE_DESCENT;
             }
+            if (failsafeIsReceivingRxData()) {
+                const uint16_t aux = getRescueAuxValue();
+                if (aux < 1400) {
+                    // 셔틀 유지
+                }
+#ifdef USE_FLIGHT_PLAN
+                else if (aux < 1600) {
+                    missionStart();  // Autopilot 재진입
+                }
+#endif
+                else {
+                    rescueState.phase = RESCUE_INITIALIZE;  // Rescue 재진입
+                }
+            }
             break;
 
         case RESCUE_SHUTTLE_INFINITE:
