@@ -4950,12 +4950,17 @@ static void cliWaypoint(const char *cmdName, char *cmdline)
             const float latDeg = (float)wp->latitude / 1e7f;
             const float lonDeg = (float)wp->longitude / 1e7f;
             const float altFeet = wp->altitude / 30.48f;
-            const float speedKnots = wp->speed / 51.4444f;
             const float durationMin = wp->duration / 600.0f;
+            float speedDisplay;
+            if (wp->type == WP_TYPE_YAW_RATE) {
+                speedDisplay = wp->speed;  // deg/s, 그대로 출력
+            } else {
+                speedDisplay = wp->speed / 51.4444f;  // cm/s → knots
+            }
             cliPrintLinef("waypoint insert %d %.7f %.7f %.0f %.0f %s %.1f %s",
                 i,
                 (double)latDeg, (double)lonDeg,
-                (double)altFeet, (double)speedKnots,
+                (double)altFeet, (double)speedDisplay,
                 wpTypeToStr(wp->type),
                 (double)durationMin,
                 wpPatternToStr(wp->pattern));
@@ -5014,8 +5019,12 @@ static void cliWaypoint(const char *cmdName, char *cmdline)
         wp.latitude  = (int32_t)(latDeg * 1e7f);
         wp.longitude = (int32_t)(lonDeg * 1e7f);
         wp.altitude  = altFt * 30.48f;
-        wp.speed     = speedKnots * 51.4444f;
         wp.type      = strToWpType(typeStr);
+        if (wp.type == WP_TYPE_YAW_RATE) {
+            wp.speed = speedKnots;  // deg/s, 변환 없이 그대로 저장
+        } else {
+            wp.speed = speedKnots * 51.4444f;  // knots → cm/s
+        }
         wp.duration  = durationMin * 600.0f;
         wp.pattern   = strToWpPattern(patternStr);
 
@@ -6696,7 +6705,7 @@ const clicmd_t cmdTable[] = {
 #endif
     CLI_COMMAND_DEF("version", "show version", NULL, cliVersion),
 #ifdef USE_FLIGHT_PLAN
-    CLI_COMMAND_DEF("waypoint", "configure waypoints", "list\\r\\n\\tclear\\r\\n\\tinsert <idx> <lat> <lon> <alt_ft> <speed_knots> <type> <duration_min> <pattern>", cliWaypoint),
+    CLI_COMMAND_DEF("waypoint", "configure waypoints", "list\\r\\n\\tclear\\r\\n\\tinsert <idx> <lat> <lon> <alt_ft> <speed> <type> <duration_min> <pattern>\\r\\n\\t\\tFLYOVER/FLYBY/HOLD/LAND/TAKEOFF/ALT_CHANGE/DELAY: speed=knots, duration=min\\r\\n\\t\\tYAW_RATE: speed=deg/s, duration=min", cliWaypoint),
 #endif
 #ifdef USE_VTX_CONTROL
 #ifdef MINIMAL_CLI

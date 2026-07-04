@@ -98,6 +98,9 @@
 #include "flight/imu.h"
 #include "flight/mixer.h"
 #include "flight/gps_rescue.h"
+#ifdef USE_FLIGHT_PLAN
+#include "flight/mission.h"
+#endif
 #include "flight/pid.h"
 #include "flight/pid_init.h"
 #include "flight/position.h"
@@ -768,6 +771,10 @@ void init(void)
         gpsLapTimerInit();
 #endif // USE_GPS_LAP_TIMER
     }
+#endif
+
+#ifdef USE_FLIGHT_PLAN
+    missionInit();  // GPS feature 상태와 무관하게 항상 waypoint 복원
 #endif
 
 #ifdef USE_LED_STRIP

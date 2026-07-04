@@ -44,7 +44,7 @@ typedef struct {
     int32_t  latitude;      // 1e-7 deg
     int32_t  longitude;     // 1e-7 deg
     float    altitude;      // cm (Configurator feet → * 30.48f)
-    float    speed;         // cm/s (Configurator knots → * 51.4444f)
+    float    speed;         // cm/s (Configurator knots → * 51.4444f). YAW_RATE 타입일 때는 deg/s (변환 없이 그대로 저장)
     missionWpType_e     type;
     float               duration;      // deciseconds (Configurator minutes → * 600.0f)
     missionWpPattern_e  pattern;
