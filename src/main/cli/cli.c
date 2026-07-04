@@ -4972,25 +4972,19 @@ static void cliWaypoint(const char *cmdName, char *cmdline)
             char latStr[20], lonStr[20];
             formatCoordinate(latStr, wp->latitude);
             formatCoordinate(lonStr, wp->longitude);
-            // alt: cm → feet (반올림)
-            int altFt = (int)(wp->altitude / 30.48f + 0.5f);
-            // speed: YAW_RATE=deg/s, else cm/s → knots
-            int speedVal;
-            if (wp->type == WP_TYPE_YAW_RATE) {
-                speedVal = (int)(wp->speed + 0.5f);
-            } else {
-                speedVal = (int)(wp->speed / 51.4444f + 0.5f);
-            }
-            // duration: deciseconds → minutes (정수.소수1자리)
-            int durInt = (int)(wp->duration / 600.0f);
-            int durFrac = (int)((wp->duration * 10.0f) / 600.0f) % 10;
-            cliPrintLinef("waypoint insert %d %s %s %d %d %s %d.%d %s",
+            // alt: cm 그대로
+            int altCm = (int)(wp->altitude + 0.5f);
+            // speed: YAW_RATE=deg/s, else cm/s (그대로)
+            int speedVal = (int)(wp->speed + 0.5f);
+            // duration: deciseconds 그대로
+            int durationDs = (int)(wp->duration + 0.5f);
+            cliPrintLinef("waypoint insert %d %s %s %d %d %s %d %s",
                 i,
                 latStr, lonStr,
-                altFt,
+                altCm,
                 speedVal,
                 wpTypeToStr(wp->type),
-                durInt, durFrac,
+                durationDs,
                 wpPatternToStr(wp->pattern));
         }
     } else if (strcasecmp(cmdline, "clear") == 0) {
@@ -5023,21 +5017,21 @@ static void cliWaypoint(const char *cmdName, char *cmdline)
         if (!(token = strtok_r(NULL, " ", &saveptr))) { cliShowParseError(cmdName); return; }
         float lonDeg = atof(token);
 
-        // alt_ft
+        // alt_cm
         if (!(token = strtok_r(NULL, " ", &saveptr))) { cliShowParseError(cmdName); return; }
-        float altFt = atof(token);
+        float altCm = atof(token);
 
-        // speed_knots
+        // speed (cm/s, YAW_RATE는 deg/s)
         if (!(token = strtok_r(NULL, " ", &saveptr))) { cliShowParseError(cmdName); return; }
-        float speedKnots = atof(token);
+        float speedRaw = atof(token);
 
         // type
         if (!(token = strtok_r(NULL, " ", &saveptr))) { cliShowParseError(cmdName); return; }
         const char *typeStr = token;
 
-        // duration_min
+        // duration (deciseconds)
         if (!(token = strtok_r(NULL, " ", &saveptr))) { cliShowParseError(cmdName); return; }
-        float durationMin = atof(token);
+        float durationDs = atof(token);
 
         // pattern
         if (!(token = strtok_r(NULL, " ", &saveptr))) { cliShowParseError(cmdName); return; }
@@ -5046,20 +5040,83 @@ static void cliWaypoint(const char *cmdName, char *cmdline)
         missionWaypoint_t wp;
         wp.latitude  = (int32_t)(latDeg * 1e7f);
         wp.longitude = (int32_t)(lonDeg * 1e7f);
-        wp.altitude  = altFt * 30.48f;
+        wp.altitude  = altCm;          // cm 그대로
         wp.type      = strToWpType(typeStr);
         if (wp.type == WP_TYPE_YAW_RATE) {
-            wp.speed = speedKnots;  // deg/s, 변환 없이 그대로 저장
+            wp.speed = speedRaw;       // deg/s, 변환 없이 그대로 저장
         } else {
-            wp.speed = speedKnots * 51.4444f;  // knots → cm/s
+            wp.speed = speedRaw;       // cm/s 그대로 저장
         }
-        wp.duration  = durationMin * 600.0f;
+        wp.duration  = durationDs;     // deciseconds 그대로
         wp.pattern   = strToWpPattern(patternStr);
 
         if (missionInsert(idx, &wp)) {
             cliPrintLinef("Waypoint %d inserted (count=%d).", idx, missionWpCount);
         } else {
             cliPrintErrorLinef(cmdName, "Insert failed: index out of bounds or max waypoints reached.");
+        }
+    } else if (strncasecmp(cmdline, "update ", 7) == 0) {
+        // update: 동일 파싱 구조로 기존 waypoint 교체
+        if (ARMING_FLAG(ARMED)) {
+            cliPrintErrorLinef(cmdName, "Cannot modify waypoints while armed.");
+            return;
+        }
+        char *args = cmdline + 6;
+        while (*args == ' ') args++;
+
+        char *saveptr;
+        char *token = strtok_r(args, " ", &saveptr);
+
+        if (!token) { cliShowParseError(cmdName); return; }
+        int idx = atoi(token);
+
+        if (!(token = strtok_r(NULL, " ", &saveptr))) { cliShowParseError(cmdName); return; }
+        float latDeg = atof(token);
+        if (!(token = strtok_r(NULL, " ", &saveptr))) { cliShowParseError(cmdName); return; }
+        float lonDeg = atof(token);
+        if (!(token = strtok_r(NULL, " ", &saveptr))) { cliShowParseError(cmdName); return; }
+        float altCm = atof(token);
+        if (!(token = strtok_r(NULL, " ", &saveptr))) { cliShowParseError(cmdName); return; }
+        float speedRaw = atof(token);
+        if (!(token = strtok_r(NULL, " ", &saveptr))) { cliShowParseError(cmdName); return; }
+        const char *typeStr = token;
+        if (!(token = strtok_r(NULL, " ", &saveptr))) { cliShowParseError(cmdName); return; }
+        float durationDs = atof(token);
+        if (!(token = strtok_r(NULL, " ", &saveptr))) { cliShowParseError(cmdName); return; }
+        const char *patternStr = token;
+
+        // 기존 idx waypoint 삭제 후 재삽입
+        missionRemove(idx);
+        missionWaypoint_t wp;
+        wp.latitude  = (int32_t)(latDeg * 1e7f);
+        wp.longitude = (int32_t)(lonDeg * 1e7f);
+        wp.altitude  = altCm;
+        wp.type      = strToWpType(typeStr);
+        wp.speed     = speedRaw;
+        wp.duration  = durationDs;
+        wp.pattern   = strToWpPattern(patternStr);
+        if (missionInsert(idx, &wp)) {
+            cliPrintLinef("Waypoint %d updated (count=%d).", idx, missionWpCount);
+        } else {
+            cliPrintErrorLinef(cmdName, "Update failed.");
+        }
+    } else if (strncasecmp(cmdline, "remove ", 7) == 0) {
+        if (ARMING_FLAG(ARMED)) {
+            cliPrintErrorLinef(cmdName, "Cannot modify waypoints while armed.");
+            return;
+        }
+        int idx = atoi(cmdline + 7);
+        if (missionRemove(idx)) {
+            cliPrintLinef("Waypoint %d removed (count=%d).", idx, missionWpCount);
+        } else {
+            cliPrintErrorLinef(cmdName, "Remove failed: invalid index.");
+        }
+    } else if (strcasecmp(cmdline, "status") == 0) {
+        cliPrintLinef("Waypoint count: %d/%d", missionWpCount, MAX_MISSION_WAYPOINTS);
+        if (missionIsActive()) {
+            cliPrintLinef("Active waypoint: %d", currentMissionWpIndex);
+        } else {
+            cliPrintLine("Mission not active.");
         }
     } else {
         cliPrintErrorLinef(cmdName, "Unknown command: %s", cmdline);
@@ -6733,7 +6790,7 @@ const clicmd_t cmdTable[] = {
 #endif
     CLI_COMMAND_DEF("version", "show version", NULL, cliVersion),
 #ifdef USE_FLIGHT_PLAN
-    CLI_COMMAND_DEF("waypoint", "configure waypoints", "list\\r\\n\\tclear\\r\\n\\tinsert <idx> <lat> <lon> <alt_ft> <speed> <type> <duration_min> <pattern>\\r\\n\\t\\tFLYOVER/FLYBY/HOLD/LAND/TAKEOFF/ALT_CHANGE/DELAY: speed=knots, duration=min\\r\\n\\t\\tYAW_RATE: speed=deg/s, duration=min", cliWaypoint),
+    CLI_COMMAND_DEF("waypoint", "configure waypoints", "list\\r\\n\\tstatus\\r\\n\\tclear\\r\\n\\tinsert <idx> <lat> <lon> <alt_cm> <speed_cms> <type> <duration_ds> <pattern>\\r\\n\\tupdate <idx> <lat> <lon> <alt_cm> <speed_cms> <type> <duration_ds> <pattern>\\r\\n\\tremove <idx>\\r\\n\\t\\talt=cm, speed=cm/s (YAW_RATE: deg/s), duration=deciseconds", cliWaypoint),
 #endif
 #ifdef USE_VTX_CONTROL
 #ifdef MINIMAL_CLI

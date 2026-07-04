@@ -43,10 +43,10 @@ typedef enum {
 typedef struct {
     int32_t  latitude;      // 1e-7 deg
     int32_t  longitude;     // 1e-7 deg
-    float    altitude;      // cm (Configurator feet → * 30.48f)
-    float    speed;         // cm/s (Configurator knots → * 51.4444f). YAW_RATE 타입일 때는 deg/s (변환 없이 그대로 저장)
+    float    altitude;      // cm
+    float    speed;         // cm/s (YAW_RATE 타입일 때는 deg/s)
     missionWpType_e     type;
-    float               duration;      // deciseconds (Configurator minutes → * 600.0f)
+    float               duration;      // deciseconds
     missionWpPattern_e  pattern;
 } missionWaypoint_t;
 
@@ -64,6 +64,7 @@ bool missionCheckAdvance(void);
 
 void missionClear(void);
 bool missionInsert(int idx, const missionWaypoint_t *wp);
+bool missionRemove(int idx);
 
 const char *wpTypeToStr(missionWpType_e type);
 missionWpType_e strToWpType(const char *str);

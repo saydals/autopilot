@@ -274,6 +274,27 @@ bool missionInsert(int idx, const missionWaypoint_t *wp)
     return true;
 }
 
+bool missionRemove(int idx)
+{
+    if (idx < 0 || idx >= missionWpCount) {
+        return false;
+    }
+
+    // 삭제 위치 이후 Waypoint를 한 칸씩 앞으로 이동
+    for (int i = idx; i < missionWpCount - 1; i++) {
+        memcpy(&missionWaypoints[i], &missionWaypoints[i + 1], sizeof(missionWaypoint_t));
+    }
+    missionWpCount--;
+
+    // PG에도 반영
+    missionConfigMutable()->waypointCount = missionWpCount;
+    for (int i = 0; i < missionWpCount; i++) {
+        missionConfigMutable()->waypoints[i] = missionWaypoints[i];
+    }
+
+    return true;
+}
+
 /* ================================================================
  * 문자열 ↔ enum 변환
  * ================================================================ */
