@@ -4972,13 +4972,13 @@ static void cliWaypoint(const char *cmdName, char *cmdline)
             char latStr[20], lonStr[20];
             formatCoordinate(latStr, wp->latitude);
             formatCoordinate(lonStr, wp->longitude);
-            // alt: cm 그대로
+            // alt: cm 그대로 (공식 업스트림: raw cm)
             int altCm = (int)(wp->altitude + 0.5f);
-            // speed: YAW_RATE=deg/s, else cm/s (그대로)
-            int speedVal = (int)(wp->speed + 0.5f);
-            // duration: deciseconds 그대로
-            int durationDs = (int)(wp->duration + 0.5f);
-            cliPrintLinef("waypoint insert %d %s %s %d %d %s %d %s",
+            // speed: YAW_RATE=deg/s, else cm/s (공식 업스트림: raw cm/s)
+            unsigned int speedVal = (unsigned int)(wp->speed + 0.5f);
+            // duration: deciseconds (공식 업스트림: raw deciseconds)
+            unsigned int durationDs = (unsigned int)(wp->duration + 0.5f);
+            cliPrintLinef("waypoint insert %u %s %s %d %u %s %u %s",
                 i,
                 latStr, lonStr,
                 altCm,
