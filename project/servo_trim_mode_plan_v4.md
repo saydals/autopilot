@@ -39,6 +39,7 @@
 ### 1) `src/main/flight/servos.h`
 
 **찾을 텍스트** (구조체 정의):
+
 ```c
 typedef struct servoConfig_s {
     servoDevConfig_t dev;
@@ -50,6 +51,7 @@ typedef struct servoConfig_s {
 ```
 
 **결과** (필드 4개 추가):
+
 ```c
 typedef struct servoConfig_s {
     servoDevConfig_t dev;
@@ -65,11 +67,13 @@ typedef struct servoConfig_s {
 ```
 
 **추가로 파일 어딘가(다른 `#define` 근처)에 상수 추가**:
+
 ```c
 #define SERVO_TRIM_LIMIT_PWM 100        // 모드 진입 시점 middle 기준 ± 한계 (pwm)
 ```
 
 **함수 선언 추가** (`void servoMixer(void);` 선언 근처, 없으면 파일 끝 `#endif` 이전 아무 곳):
+
 ```c
 uint8_t getActiveServoRuleCount(void);
 const servoMixer_t *getCurrentServoMixer(void);
@@ -82,10 +86,13 @@ const servoMixer_t *getCurrentServoMixer(void);
 **2-1) 기본값 설정**
 
 **찾을 텍스트**:
+
 ```c
 void pgResetFn_servoConfig(servoConfig_t *servoConfig)
 ```
+
 이 함수 본문 안에 (다른 필드 기본값 대입 라인들 사이 아무 곳에) 아래 4줄을 추가:
+
 ```c
     servoConfig->servo_trim_step = 5;
     servoConfig->trim_aileron_dir = 1;
@@ -114,6 +121,7 @@ const servoMixer_t *getCurrentServoMixer(void)
 ### 3) `src/main/cli/settings.h`
 
 **찾을 텍스트** (enum 마지막 부분):
+
 ```c
 #ifdef USE_RX_EXPRESSLRS
     TABLE_FREQ_DOMAIN,
@@ -124,6 +132,7 @@ const servoMixer_t *getCurrentServoMixer(void)
 ```
 
 **결과** (`TABLE_TRIM_DIRECTION`을 `LOOKUP_TABLE_COUNT` 바로 앞에 추가 — 반드시 맨 끝에 추가할 것. 중간에 끼워넣으면 그 뒤의 모든 TABLE_* 값이 밀려서 기존 파라미터가 전부 깨진다):
+
 ```c
 #ifdef USE_RX_EXPRESSLRS
     TABLE_FREQ_DOMAIN,
@@ -143,10 +152,13 @@ const servoMixer_t *getCurrentServoMixer(void)
 **4-1) 문자열 배열 선언 추가**
 
 **찾을 텍스트**:
+
 ```c
 const char * const lookupTableOffOn[] = {
 ```
+
 이 선언부 근처(파일 상단, 다른 `lookupTableXxx[]` 선언들이 모여있는 구역) 아무 곳에 새 배열을 추가:
+
 ```c
 static const char * const lookupTableTrimDirection[] = {
     "OFF", "NORMAL", "REVERSED"
@@ -156,6 +168,7 @@ static const char * const lookupTableTrimDirection[] = {
 **4-2) `lookupTables[]` 배열에 항목 추가**
 
 **찾을 텍스트** (배열의 마지막 부분):
+
 ```c
 #ifdef USE_RX_EXPRESSLRS
     LOOKUP_TABLE_ENTRY(lookupTableFreqDomain),
@@ -165,6 +178,7 @@ static const char * const lookupTableTrimDirection[] = {
 ```
 
 **결과** (역시 맨 끝에 추가 — `settings.h`의 enum 순서와 정확히 같은 순서여야 함):
+
 ```c
 #ifdef USE_RX_EXPRESSLRS
     LOOKUP_TABLE_ENTRY(lookupTableFreqDomain),
@@ -177,12 +191,14 @@ static const char * const lookupTableTrimDirection[] = {
 **4-3) CLI 파라미터 4개 추가**
 
 **찾을 텍스트**:
+
 ```c
     { "ready_to_arm_wiggle_hz",    VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = { 0, 6 }, PG_SERVO_CONFIG, offsetof(servoConfig_t, ready_to_arm_wiggle_hz) },
 #endif
 ```
 
 **결과**:
+
 ```c
     { "ready_to_arm_wiggle_hz",    VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = { 0, 6 }, PG_SERVO_CONFIG, offsetof(servoConfig_t, ready_to_arm_wiggle_hz) },
     { "servo_trim_step",           VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = { 1, 20 }, PG_SERVO_CONFIG, offsetof(servoConfig_t, servo_trim_step) },
@@ -201,11 +217,13 @@ static const char * const lookupTableTrimDirection[] = {
 **5-1) 박스 이름 변경**
 
 **찾을 텍스트**:
+
 ```c
     { .boxId = BOXHEADFREE, .boxName = "HEADFREE", .permanentId = 6 },
 ```
 
 **결과**:
+
 ```c
     { .boxId = BOXHEADFREE, .boxName = "SERVO TRIM", .permanentId = 6 },
 ```
@@ -215,6 +233,7 @@ static const char * const lookupTableTrimDirection[] = {
 **5-2) `getBoxIdState()` 함수 수정 (필수 — 이거 없으면 Configurator Modes 탭에서 스위치를 켜도 활성 표시가 안 뜬다)**
 
 **찾을 텍스트**:
+
 ```c
 bool getBoxIdState(boxId_e boxid)
 {
@@ -234,6 +253,7 @@ bool getBoxIdState(boxId_e boxid)
 ```
 
 **결과** (`BOXARM` 분기와 `boxid <= BOXID_FLIGHTMODE_LAST` 분기 **사이**에 새 분기를 끼워넣는다 — 순서가 중요하다. `BOXHEADFREE`는 `BOXID_FLIGHTMODE_LAST`보다 작은 값이라, 아래처럼 먼저 걸러내지 않으면 원래 분기(`FLIGHT_MODE` 조회)로 빠져서 항상 false가 나온다):
+
 ```c
 bool getBoxIdState(boxId_e boxid)
 {
@@ -270,6 +290,7 @@ bool getBoxIdState(boxId_e boxid)
 **6-1) 삭제 대상 A** (HEADFREE_MODE 플래그 설정/해제):
 
 **찾아서 삭제할 텍스트**:
+
 ```c
         if (IS_RC_MODE_ACTIVE(BOXHEADFREE) && !FLIGHT_MODE(GPS_RESCUE_MODE)) {
             if (!FLIGHT_MODE(HEADFREE_MODE)) {
@@ -283,6 +304,7 @@ bool getBoxIdState(boxId_e boxid)
 **6-2) 삭제 대상 B** (BOXHEADADJ — 헤드프리 레퍼런스 각 설정, 본 기능과 무관):
 
 **찾아서 삭제할 텍스트**:
+
 ```c
         if (IS_RC_MODE_ACTIVE(BOXHEADADJ) && !FLIGHT_MODE(GPS_RESCUE_MODE)) {
             if (imuQuaternionHeadfreeOffsetSet()) {
@@ -294,6 +316,7 @@ bool getBoxIdState(boxId_e boxid)
 **6-3) 삭제 대상 C** (고정익에서 HEADFREE_MODE 강제 비활성화 — 더 이상 필요 없음, 어차피 위 A를 지우면 이 플래그 자체가 설정될 일이 없다):
 
 **찾아서 삭제할 텍스트**:
+
 ```c
     if (mixerConfig()->mixerMode == MIXER_FLYING_WING || mixerConfig()->mixerMode == MIXER_AIRPLANE) {
         DISABLE_FLIGHT_MODE(HEADFREE_MODE);
@@ -307,12 +330,14 @@ bool getBoxIdState(boxId_e boxid)
 ### 7) `src/main/osd/osd_elements.c`
 
 **찾을 텍스트**:
+
 ```c
     } else if (FLIGHT_MODE(HEADFREE_MODE)) {
         strcpy(element->buff, "HEAD");
 ```
 
 **결과**:
+
 ```c
     } else if (IS_RC_MODE_ACTIVE(BOXHEADFREE)) {
         strcpy(element->buff, "TRIM");
@@ -335,17 +360,20 @@ bool getBoxIdState(boxId_e boxid)
 파일 최상단 include 목록에 다음 두 줄을 추가 (현재 `<stdlib.h>`, `<math.h>`는 있지만 `<string.h>`가 없고, `flight/servos.h`도 include돼 있지 않음):
 
 **찾을 텍스트**:
+
 ```c
 #include <math.h>
 ```
 
 **결과**:
+
 ```c
 #include <math.h>
 #include <string.h>
 ```
 
 그리고 다른 `#include "flight/..."` 줄들 근처(예: `#include "flight/pid.h"` 아래)에:
+
 ```c
 #include "flight/servos.h"
 ```
@@ -353,11 +381,13 @@ bool getBoxIdState(boxId_e boxid)
 **9-2) 675번 줄 근처 — 죽은 조건 정리**
 
 **찾을 텍스트**:
+
 ```c
         if (rxConfig()->fpvCamAngleDegrees && IS_RC_MODE_ACTIVE(BOXFPVANGLEMIX) && !FLIGHT_MODE(HEADFREE_MODE)) {
 ```
 
 **결과**:
+
 ```c
         if (rxConfig()->fpvCamAngleDegrees && IS_RC_MODE_ACTIVE(BOXFPVANGLEMIX)) {
 ```
@@ -365,6 +395,7 @@ bool getBoxIdState(boxId_e boxid)
 **9-3) 헤드프리 쿼터니언 변환 블록 삭제**
 
 **찾아서 삭제할 텍스트** (통째로 삭제, 대체 코드 없음):
+
 ```c
     if (FLIGHT_MODE(HEADFREE_MODE)) {
         static t_fp_vector_def  rcCommandBuff;
@@ -390,6 +421,7 @@ bool getBoxIdState(boxId_e boxid)
 **9-4) 새 Servo Trim 블록 삽입 (핵심 — 이 코드 하나만 사용할 것, 다른 초안과 섞지 말 것)**
 
 Board Align 블록은 아래처럼 끝난다:
+
 ```c
         } else {
             // Mode deactivated: reset state (immediate release, no transition)

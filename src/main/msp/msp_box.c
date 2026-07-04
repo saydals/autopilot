@@ -53,7 +53,7 @@ static const box_t boxes[CHECKBOX_ITEM_COUNT] = {
 //    { .boxId = BOXBARO, .boxName = "BARO", .permanentId = 3 },
     { .boxId = BOXANTIGRAVITY, .boxName = "ANTI GRAVITY", .permanentId = 4 },
     { .boxId = BOXMAG, .boxName = "MAG", .permanentId = 5 },
-    { .boxId = BOXHEADFREE, .boxName = "HEADFREE", .permanentId = 6 },
+    { .boxId = BOXHEADFREE, .boxName = "SERVO TRIM", .permanentId = 6 },
     { .boxId = BOXHEADADJ, .boxName = "HEADADJ", .permanentId = 7 },
     { .boxId = BOXCAMSTAB, .boxName = "CAMSTAB", .permanentId = 8 },
 //    { .boxId = BOXCAMTRIG, .boxName = "CAMTRIG", .permanentId = 9 },
@@ -366,6 +366,11 @@ bool getBoxIdState(boxId_e boxid)
 
     if (boxid == BOXARM) {
         return ARMING_FLAG(ARMED);
+    } else if (boxid == BOXHEADFREE) {
+        // Servo Trim이 이 박스를 재사용한다. HEADFREE_MODE flight mode flag는
+        // 더 이상 어디서도 설정되지 않으므로, 이 박스는
+        // flightModeFlags가 아니라 RC 모드(rcModeActivationMask) 상태를 직접 조회한다.
+        return IS_RC_MODE_ACTIVE(BOXHEADFREE);
     } else if (boxid <= BOXID_FLIGHTMODE_LAST) {
         return FLIGHT_MODE(1 << boxIdToFlightModeMap[boxid]);
     } else {

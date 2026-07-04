@@ -4952,10 +4952,10 @@ static void cliWaypoint(const char *cmdName, char *cmdline)
             const float altFeet = wp->altitude / 30.48f;
             const float speedKnots = wp->speed / 51.4444f;
             const float durationMin = wp->duration / 600.0f;
-            cliPrintLinef("waypoint insert %d %.7f %.7f %d %d %s %.1f %s",
+            cliPrintLinef("waypoint insert %d %.7f %.7f %.0f %.0f %s %.1f %s",
                 i,
                 (double)latDeg, (double)lonDeg,
-                (int)altFeet, (int)speedKnots,
+                (double)altFeet, (double)speedKnots,
                 wpTypeToStr(wp->type),
                 (double)durationMin,
                 wpPatternToStr(wp->pattern));
@@ -4967,7 +4967,7 @@ static void cliWaypoint(const char *cmdName, char *cmdline)
         }
         missionClear();
         cliPrintLine("All waypoints cleared.");
-    } else if (strncasecmp(cmdline, "insert", 6) == 0) {
+    } else if (strncasecmp(cmdline, "insert ", 7) == 0) {
         if (ARMING_FLAG(ARMED)) {
             cliPrintErrorLinef(cmdName, "Cannot modify waypoints while armed.");
             return;
@@ -6696,7 +6696,7 @@ const clicmd_t cmdTable[] = {
 #endif
     CLI_COMMAND_DEF("version", "show version", NULL, cliVersion),
 #ifdef USE_FLIGHT_PLAN
-    CLI_COMMAND_DEF("waypoint", "configure waypoints", "list\\r\\n\\tclear\\r\\n\\tinsert <lat> <lon> <alt_ft> <speed_knots>", cliWaypoint),
+    CLI_COMMAND_DEF("waypoint", "configure waypoints", "list\\r\\n\\tclear\\r\\n\\tinsert <idx> <lat> <lon> <alt_ft> <speed_knots> <type> <duration_min> <pattern>", cliWaypoint),
 #endif
 #ifdef USE_VTX_CONTROL
 #ifdef MINIMAL_CLI

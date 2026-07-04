@@ -1212,13 +1212,19 @@ void gpsRescueUpdate(void)
 #ifdef USE_FLIGHT_PLAN
     // Mission mode: target coordinates are set by mission, not by rescue state machine
     if (missionIsActive()) {
-        missionUpdateTargetOnly();        // 타겟 좌표/고도/속도만 설정 (WP 전환 X)
-        rescueState.phase = RESCUE_FLY_HOME;
-        performSanityChecks();            // 안전 진단 (GPS 손실 등)
-        rescueAttainPosition();           // 현재 타겟으로 제어 실행
-        missionCheckAdvance();            // CPA 체크 + WP 전환
-        newGPSData = false;
-        return;                           // 기존 switch 분기 건너뜀
+        // AUX 탈출 체크: Autopilot 범위(1400~1600) 벗어나면 미션 중단
+        const uint16_t auxVal = getRescueAuxValue();
+        if (failsafeIsReceivingRxData() && (auxVal < 1400 || auxVal >= 1600)) {
+            missionStop();  // 미션 중단 → 아래 switch로 fall-through
+        } else {
+            missionUpdateTargetOnly();        // 타겟 좌표/고도/속도만 설정 (WP 전환 X)
+            rescueState.phase = RESCUE_FLY_HOME;
+            performSanityChecks();            // 안전 진단 (GPS 손실 등)
+            rescueAttainPosition();           // 현재 타겟으로 제어 실행
+            missionCheckAdvance();            // CPA 체크 + WP 전환
+            newGPSData = false;
+            return;                           // 기존 switch 분기 건너뜀
+        }
     }
 #endif
 

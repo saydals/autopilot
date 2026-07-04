@@ -166,6 +166,10 @@ const char * const lookupTableRangefinderHardware[] = {
 };
 #endif
 
+static const char * const lookupTableTrimDirection[] = {
+    "OFF", "NORMAL", "REVERSED"
+};
+
 const char * const lookupTableOffOn[] = {
     "OFF", "ON"
 };
@@ -654,6 +658,7 @@ const lookupTableEntry_t lookupTables[] = {
     LOOKUP_TABLE_ENTRY(lookupTableFreqDomain),
     LOOKUP_TABLE_ENTRY(lookupTableSwitchMode),
 #endif
+    LOOKUP_TABLE_ENTRY(lookupTableTrimDirection),
 };
 
 #undef LOOKUP_TABLE_ENTRY
@@ -974,6 +979,10 @@ const clivalue_t valueTable[] = {
     { "tri_unarmed_servo",          VAR_INT8   | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON }, PG_SERVO_CONFIG, offsetof(servoConfig_t, tri_unarmed_servo) },
     { "channel_forwarding_start",   VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = { AUX1, MAX_SUPPORTED_RC_CHANNEL_COUNT }, PG_SERVO_CONFIG, offsetof(servoConfig_t, channelForwardingStartChannel) },
     { "ready_to_arm_wiggle_hz",    VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = { 0, 6 }, PG_SERVO_CONFIG, offsetof(servoConfig_t, ready_to_arm_wiggle_hz) },
+    { "servo_trim_step",           VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = { 1, 20 }, PG_SERVO_CONFIG, offsetof(servoConfig_t, servo_trim_step) },
+    { "trim_aileron",              VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_TRIM_DIRECTION }, PG_SERVO_CONFIG, offsetof(servoConfig_t, trim_aileron_dir) },
+    { "trim_elevator",             VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_TRIM_DIRECTION }, PG_SERVO_CONFIG, offsetof(servoConfig_t, trim_elevator_dir) },
+    { "trim_rudder",               VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_TRIM_DIRECTION }, PG_SERVO_CONFIG, offsetof(servoConfig_t, trim_rudder_dir) },
 #endif
 
 // PG_CONTROLRATE_PROFILES

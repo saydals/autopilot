@@ -32,6 +32,8 @@
 #define DEFAULT_SERVO_MIDDLE 1500
 #define DEFAULT_SERVO_MAX 2000
 
+#define SERVO_TRIM_LIMIT_PWM 100        // 모드 진입 시점 middle 기준 ± 한계 (pwm)
+
 // These must be consecutive, see 'reversedSources'
 typedef enum {
     INPUT_STABILIZED_ROLL = 0,
@@ -135,6 +137,10 @@ typedef struct servoConfig_s {
     uint8_t tri_unarmed_servo;              // send tail servo correction pulses even when unarmed
     uint8_t channelForwardingStartChannel;
     uint8_t ready_to_arm_wiggle_hz;          // 0=OFF, 1~6=Hz
+    uint8_t servo_trim_step;                // Servo Trim mode step size in pwm, range 1-20
+    uint8_t trim_aileron_dir;               // 0=off, 1=normal(자동계산), 2=reversed
+    uint8_t trim_elevator_dir;              // 0=off, 1=normal(자동계산), 2=reversed
+    uint8_t trim_rudder_dir;                // 0=off, 1=normal(자동계산), 2=reversed
 } servoConfig_t;
 
 PG_DECLARE(servoConfig_t, servoConfig);
@@ -178,6 +184,8 @@ int servoDirection(int servoIndex, int fromChannel);
 void servosInit(void);
 void servosFilterInit(void);
 void servoMixer(void);
+uint8_t getActiveServoRuleCount(void);
+const servoMixer_t *getCurrentServoMixer(void);
 // tricopter specific
 void servosTricopterInit(void);
 void servosTricopterMixer(void);

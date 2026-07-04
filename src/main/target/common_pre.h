@@ -392,6 +392,7 @@
 #define USE_GPS_NMEA
 #define USE_GPS_UBLOX
 #define USE_GPS_RESCUE
+#define USE_FLIGHT_PLAN
 #endif // USE_GPS
 
 

@@ -167,6 +167,9 @@ void sbufWriteBuildInfoFlags(sbuf_t *dst)
 #ifdef USE_PWM_OUTPUT
         BUILD_OPTION_PWM_OUTPUT,
 #endif
+#ifdef USE_FLIGHT_PLAN
+        BUILD_OPTION_FLIGHT_PLAN,
+#endif
     };
 
     for (unsigned i = 0; i < ARRAYLEN(options); i++)

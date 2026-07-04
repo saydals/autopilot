@@ -116,11 +116,6 @@ bool missionIsActive(void)
     return isMissionActive && (currentMissionWpIndex < missionWpCount);
 }
 
-bool missionHasTarget(void)
-{
-    return missionIsActive();
-}
-
 /* ================================================================
  * Mission 타겟 설정
  * ================================================================ */

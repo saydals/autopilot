@@ -22,6 +22,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 
 #include "platform.h"
 
@@ -45,6 +46,8 @@
 #include "flight/gps_rescue.h"
 #include "flight/pid.h"
 #include "flight/pid_init.h"
+#include "flight/mixer.h"
+#include "flight/servos.h"
 
 #include "pg/rx.h"
 
@@ -672,7 +675,7 @@ FAST_CODE void processRcCommand(void)
 
         }
         // adjust unfiltered setpoint steps to camera angle (mixing Roll and Yaw)
-        if (rxConfig()->fpvCamAngleDegrees && IS_RC_MODE_ACTIVE(BOXFPVANGLEMIX) && !FLIGHT_MODE(HEADFREE_MODE)) {
+        if (rxConfig()->fpvCamAngleDegrees && IS_RC_MODE_ACTIVE(BOXFPVANGLEMIX)) {
             scaleRawSetpointToFpvCamAngle();
         }
     }
@@ -745,24 +748,6 @@ FAST_CODE_NOINLINE void updateRcCommands(void)
             }
         }
     }
-    if (FLIGHT_MODE(HEADFREE_MODE)) {
-        static t_fp_vector_def  rcCommandBuff;
-
-        rcCommandBuff.X = rcCommand[ROLL];
-        rcCommandBuff.Y = rcCommand[PITCH];
-        if ((!FLIGHT_MODE(ANGLE_MODE) && (!FLIGHT_MODE(HORIZON_MODE)) && (!FLIGHT_MODE(GPS_RESCUE_MODE)))) {
-            rcCommandBuff.Z = rcCommand[YAW];
-        } else {
-            rcCommandBuff.Z = 0;
-        }
-        imuQuaternionHeadfreeTransformVectorEarthToBody(&rcCommandBuff);
-        rcCommand[ROLL] = rcCommandBuff.X;
-        rcCommand[PITCH] = rcCommandBuff.Y;
-        if ((!FLIGHT_MODE(ANGLE_MODE)&&(!FLIGHT_MODE(HORIZON_MODE)) && (!FLIGHT_MODE(GPS_RESCUE_MODE)))) {
-            rcCommand[YAW] = rcCommandBuff.Z;
-        }
-    }
-
     // --- Board Alignment Tuning Mode ---
     // BOARD ALIGN mode is intended to evaluate cross-axis coupling caused by board misalignment
     // during a sustained roll maneuver. Preserving roll while forcing pitch and yaw to neutral
@@ -846,6 +831,135 @@ FAST_CODE_NOINLINE void updateRcCommands(void)
             }
         }
     }
+
+    // ↓↓↓ 여기부터 새로 삽입 ↓↓↓
+    // --- Servo Trim Mode ---
+    {
+        static bool servoTrimModeActive = false;
+        static float servoTrimBaseline[3]; // [ROLL, PITCH, YAW] — ROLL은 활성 시점 값 유지
+        static int16_t originalMiddle[MAX_SUPPORTED_SERVOS]; // 모드 진입 시 각 서보의 middle 스냅샷
+        static bool latchHi[3];
+        static bool latchLo[3];
+
+        if (IS_RC_MODE_ACTIVE(BOXHEADFREE)
+            && !IS_RC_MODE_ACTIVE(BOXUSER2)            // Board Align과 상호배타
+            && !FLIGHT_MODE(ANGLE_MODE)                // ANGLE 모드에서 차단
+            && !FLIGHT_MODE(HORIZON_MODE))             // HORIZON 모드에서 차단
+        {
+            // 모드 진입 시: 베이스라인 캡처, originalMiddle 캡처, 래치 초기화
+            if (!servoTrimModeActive) {
+                servoTrimModeActive = true;
+                servoTrimBaseline[ROLL]  = rcCommand[ROLL];  // 에일러론은 활성 시점 값 유지
+                servoTrimBaseline[PITCH] = 0;                 // 엘리베이터는 0 고정
+                servoTrimBaseline[YAW]   = 0;                 // 러더는 0 고정
+                for (int s = 0; s < MAX_SUPPORTED_SERVOS; s++) {
+                    originalMiddle[s] = servoParams(s)->middle;
+                }
+                for (int i = 0; i < 3; i++) {
+                    latchHi[i] = false;
+                    latchLo[i] = false;
+                }
+            }
+
+            // 스틱 인터셉트: 비행 커맨드 프리즈 (쓰로틀은 건드리지 않음)
+            rcCommand[ROLL]  = servoTrimBaseline[ROLL];
+            rcCommand[PITCH] = 0;
+            rcCommand[YAW]   = 0;
+
+            const int axisDir[3] = {
+                servoConfig()->trim_aileron_dir,   // ROLL
+                servoConfig()->trim_elevator_dir,  // PITCH
+                servoConfig()->trim_rudder_dir,    // YAW
+            };
+            const int inputSourceForAxis[3] = {
+                INPUT_STABILIZED_ROLL,
+                INPUT_STABILIZED_PITCH,
+                INPUT_STABILIZED_YAW,
+            };
+            const int inputSourceRCForAxis[3] = {
+                INPUT_RC_ROLL,     // 커스텀 믹서에서 사용 가능
+                INPUT_RC_PITCH,
+                INPUT_RC_YAW,
+            };
+            const int axes[3] = { ROLL, PITCH, YAW };
+
+            bool changed = false;
+
+            for (int i = 0; i < 3; i++) {
+                if (axisDir[i] == 0) continue;  // 0 = 사용안함, 히스테리시스 판정 스킵
+
+                // 히스테리시스 래치 판정 (Board Align과 동일 패턴)
+                float raw = rcData[axes[i]];
+                bool stepUp   = false;
+                bool stepDown = false;
+
+                if (!latchHi[i] && raw > 1750.0f) {
+                    stepUp = true;
+                    latchHi[i] = true;
+                } else if (latchHi[i] && raw < 1600.0f) {
+                    latchHi[i] = false;
+                }
+
+                if (!latchLo[i] && raw < 1250.0f) {
+                    stepDown = true;
+                    latchLo[i] = true;
+                } else if (latchLo[i] && raw > 1400.0f) {
+                    latchLo[i] = false;
+                }
+
+                if (!stepUp && !stepDown) continue;
+
+                int8_t step = servoConfig()->servo_trim_step;
+                int8_t axisMultiplier = (axisDir[i] == 2) ? -1 : 1;
+                int8_t stepSign = stepUp ? 1 : -1;
+
+                // 이번 판정에서 이미 조정한 서보를 추적 (동일 서보에 같은 축 규칙이 여러 개 있어도 한 번만 조정)
+                // NOTE: 이 updated[] 배열은 축 루프 안에 있어야 함. 밖으로 빼면 플라잉윙에서 엘리베이터 트림이 죽음
+                bool updated[MAX_SUPPORTED_SERVOS];
+                memset(updated, 0, sizeof(updated));
+
+                for (int r = 0; r < getActiveServoRuleCount(); r++) {
+                    const servoMixer_t *rule = &getCurrentServoMixer()[r];
+
+                    if (rule->inputSource != inputSourceForAxis[i]
+                        && rule->inputSource != inputSourceRCForAxis[i]) continue;
+
+                    uint8_t target = rule->targetChannel;
+
+                    if (updated[target]) continue;
+                    updated[target] = true;
+
+                    // forwardFromChannel 서보는 트림 대상에서 제외
+                    if ((uint8_t)servoParams(target)->forwardFromChannel
+                        != CHANNEL_FORWARDING_DISABLED) continue;
+
+                    // 유효 방향 = servoDirection(reversedSources) x rule.rate 부호 x servoParams.rate 부호
+                    int8_t effectiveDir = servoDirection(target, rule->inputSource)
+                                        * ((rule->rate < 0) ? -1 : 1)
+                                        * ((servoParams(target)->rate < 0) ? -1 : 1);
+                    int16_t signedStep = step * effectiveDir * axisMultiplier * stepSign;
+                    int16_t currentMiddle = servoParams(target)->middle;
+                    int16_t newMiddle = constrain(
+                        currentMiddle + signedStep,
+                        originalMiddle[target] - SERVO_TRIM_LIMIT_PWM,
+                        originalMiddle[target] + SERVO_TRIM_LIMIT_PWM
+                    );
+                    if (newMiddle != currentMiddle) {
+                        servoParamsMutable(target)->middle = newMiddle;
+                        changed = true;
+                    }
+                }
+            }
+            if (changed) {
+                beeper(BEEPER_RX_SET);
+            }
+        } else {
+            if (servoTrimModeActive) {
+                servoTrimModeActive = false;
+            }
+        }
+    }
+    // ↑↑↑ 여기까지 삽입 ↑↑↑
 }
 
 void resetYawAxis(void)
