@@ -110,6 +110,9 @@ bool cliMode = false;
 #include "flight/pid.h"
 #include "flight/position.h"
 #include "flight/servos.h"
+#ifdef USE_FLIGHT_PLAN
+#include "flight/mission.h"
+#endif
 
 #include "io/asyncfatfs/asyncfatfs.h"
 #include "io/beeper.h"
@@ -4933,6 +4936,100 @@ static void cliVersion(const char *cmdName, char *cmdline)
     printVersion(true);
 }
 
+#ifdef USE_FLIGHT_PLAN
+static void cliWaypoint(const char *cmdName, char *cmdline)
+{
+    if (strcasecmp(cmdline, "list") == 0) {
+        if (missionWpCount == 0) {
+            cliPrintLine("No waypoints.");
+            return;
+        }
+        cliPrintLinef("# Waypoint count: %d", missionWpCount);
+        for (int i = 0; i < missionWpCount; i++) {
+            missionWaypoint_t *wp = &missionWaypoints[i];
+            const float latDeg = (float)wp->latitude / 1e7f;
+            const float lonDeg = (float)wp->longitude / 1e7f;
+            const float altFeet = wp->altitude / 30.48f;
+            const float speedKnots = wp->speed / 51.4444f;
+            const float durationMin = wp->duration / 600.0f;
+            cliPrintLinef("waypoint insert %d %.7f %.7f %d %d %s %.1f %s",
+                i,
+                (double)latDeg, (double)lonDeg,
+                (int)altFeet, (int)speedKnots,
+                wpTypeToStr(wp->type),
+                (double)durationMin,
+                wpPatternToStr(wp->pattern));
+        }
+    } else if (strcasecmp(cmdline, "clear") == 0) {
+        if (ARMING_FLAG(ARMED)) {
+            cliPrintErrorLinef(cmdName, "Cannot clear waypoints while armed.");
+            return;
+        }
+        missionClear();
+        cliPrintLine("All waypoints cleared.");
+    } else if (strncasecmp(cmdline, "insert", 6) == 0) {
+        if (ARMING_FLAG(ARMED)) {
+            cliPrintErrorLinef(cmdName, "Cannot modify waypoints while armed.");
+            return;
+        }
+        char *args = cmdline + 6;
+        while (*args == ' ') args++;
+
+        char *saveptr;
+        char *token = strtok_r(args, " ", &saveptr);
+
+        // idx
+        if (!token) { cliShowParseError(cmdName); return; }
+        int idx = atoi(token);
+
+        // lat
+        if (!(token = strtok_r(NULL, " ", &saveptr))) { cliShowParseError(cmdName); return; }
+        float latDeg = atof(token);
+
+        // lon
+        if (!(token = strtok_r(NULL, " ", &saveptr))) { cliShowParseError(cmdName); return; }
+        float lonDeg = atof(token);
+
+        // alt_ft
+        if (!(token = strtok_r(NULL, " ", &saveptr))) { cliShowParseError(cmdName); return; }
+        float altFt = atof(token);
+
+        // speed_knots
+        if (!(token = strtok_r(NULL, " ", &saveptr))) { cliShowParseError(cmdName); return; }
+        float speedKnots = atof(token);
+
+        // type
+        if (!(token = strtok_r(NULL, " ", &saveptr))) { cliShowParseError(cmdName); return; }
+        const char *typeStr = token;
+
+        // duration_min
+        if (!(token = strtok_r(NULL, " ", &saveptr))) { cliShowParseError(cmdName); return; }
+        float durationMin = atof(token);
+
+        // pattern
+        if (!(token = strtok_r(NULL, " ", &saveptr))) { cliShowParseError(cmdName); return; }
+        const char *patternStr = token;
+
+        missionWaypoint_t wp;
+        wp.latitude  = (int32_t)(latDeg * 1e7f);
+        wp.longitude = (int32_t)(lonDeg * 1e7f);
+        wp.altitude  = altFt * 30.48f;
+        wp.speed     = speedKnots * 51.4444f;
+        wp.type      = strToWpType(typeStr);
+        wp.duration  = durationMin * 600.0f;
+        wp.pattern   = strToWpPattern(patternStr);
+
+        if (missionInsert(idx, &wp)) {
+            cliPrintLinef("Waypoint %d inserted (count=%d).", idx, missionWpCount);
+        } else {
+            cliPrintErrorLinef(cmdName, "Insert failed: index out of bounds or max waypoints reached.");
+        }
+    } else {
+        cliPrintErrorLinef(cmdName, "Unknown command: %s", cmdline);
+    }
+}
+#endif
+
 #ifdef USE_RC_SMOOTHING_FILTER
 static void cliRcSmoothing(const char *cmdName, char *cmdline)
 {
@@ -6448,6 +6545,9 @@ typedef struct {
 #endif
 
 static void cliHelp(const char *cmdName, char *cmdline);
+#ifdef USE_FLIGHT_PLAN
+static void cliWaypoint(const char *cmdName, char *cmdline);
+#endif
 
 // should be sorted a..z for bsearch()
 const clicmd_t cmdTable[] = {
@@ -6595,6 +6695,9 @@ const clicmd_t cmdTable[] = {
     CLI_COMMAND_DEF("timer", "show/set timers", "<> | <pin> list | <pin> [af<alternate function>|none|<option(deprecated)>] | list | show", cliTimer),
 #endif
     CLI_COMMAND_DEF("version", "show version", NULL, cliVersion),
+#ifdef USE_FLIGHT_PLAN
+    CLI_COMMAND_DEF("waypoint", "configure waypoints", "list\\r\\n\\tclear\\r\\n\\tinsert <lat> <lon> <alt_ft> <speed_knots>", cliWaypoint),
+#endif
 #ifdef USE_VTX_CONTROL
 #ifdef MINIMAL_CLI
     CLI_COMMAND_DEF("vtx", "vtx channels on switch", NULL, cliVtx),

@@ -18,10 +18,15 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "common/axis.h"
 
 #include "pg/gps_rescue.h"
+
+// Mission 모듈에서 사용하는 상수 (gps_rescue.c에서 이동)
+#define GPS_RESCUE_TOUCH_ACTIVATION_CM       2000.0f
+#define GPS_RESCUE_TOUCH_PROXIMITY_CM        500.0f
 
 #define TASK_GPS_RESCUE_RATE_HZ 100  // in sync with altitude task rate
 
@@ -79,9 +84,66 @@ typedef enum {
 
 extern float gpsRescueAngle[ANGLE_INDEX_COUNT]; // NOTE: ANGLES ARE IN CENTIDEGREES
 
+// mission.c에서 접근해야 하는 구조체 및 변수
+typedef enum {
+    RESCUE_HEALTHY,
+    RESCUE_FLYAWAY,
+    RESCUE_GPSLOST,
+    RESCUE_LOWSATS,
+    RESCUE_CRASH_FLIP_DETECTED,
+    RESCUE_STALLED,
+    RESCUE_TOO_CLOSE,
+    RESCUE_NO_HOME_POINT
+} rescueFailureState_e;
+
+typedef struct {
+    float maxAltitudeCm;
+    float returnAltitudeCm;
+    float targetAltitudeCm;
+    float targetLandingAltitudeCm;
+    float targetVelocityCmS;
+    float descentDistanceM;
+    int8_t secondsFailing;
+    float yawAttenuator;
+    float disarmThreshold;
+    uint32_t distanceToTargetCm;
+    int32_t  directionToTargetCd;
+} rescueIntent_s;
+
+typedef struct {
+    float currentAltitudeCm;
+    float distanceToHomeCm;
+    float distanceToHomeM;
+    uint16_t groundSpeedCmS;
+    int16_t directionToHome;
+    float accMagnitude;
+    bool healthy;
+    float errorAngle;
+    float gpsDataIntervalSeconds;
+    float altitudeDataIntervalSeconds;
+    float gpsRescueTaskIntervalSeconds;
+    float velocityToHomeCmS;
+    float absErrorAngle;
+    float imuYawCogGain;
+} rescueSensorData_s;
+
+typedef struct {
+    rescuePhase_e phase;
+    rescueFailureState_e failure;
+    rescueSensorData_s sensor;
+    rescueIntent_s intent;
+    bool isAvailable;
+} rescueState_s;
+
+extern rescueState_s rescueState;
+extern int32_t currentVCLat;
+extern int32_t currentVCLon;
+
 void gpsRescueInit(void);
 void gpsRescueUpdate(void);
 void gpsRescueNewGpsData(void);
+void gpsRescueStart(void);
+void gpsRescueStop(void);
 
 float         gpsRescueGetYawRate(void);
 float         gpsRescueGetThrottle(void);

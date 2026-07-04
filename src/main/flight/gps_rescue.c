@@ -56,6 +56,10 @@
 
 #include "gps_rescue.h"
 
+#ifdef USE_FLIGHT_PLAN
+#include "mission.h"
+#endif
+
 /* ================================================================
  * 상수 정의 (Magic Number 정리)
  * ================================================================ */
@@ -90,65 +94,13 @@
 #define MAX_PITCH_FLYHOME_DEG                20.0f // 귀환 단계 최대 피치각 
 #define MAX_ROLL_DEG                         75.0f
 
-#define GPS_RESCUE_TOUCH_ACTIVATION_CM       2000.0f // 터치 판정(CPA) 감시 시작 거리 (20m)
-#define GPS_RESCUE_TOUCH_PROXIMITY_CM        500.0f  // 즉시 터치 판정 근접 거리 (5m)
 #define DESCENT_HOME_TRACK_ALT_M             5.0f
 
 
 
 /* ================================================================
- * 열거형 / 구조체 정의
+ * 열거형 / 구조체 정의 (gps_rescue.h에 있음 — 중복 방지)
  * ================================================================ */
-
-typedef enum {
-    RESCUE_HEALTHY,
-    RESCUE_FLYAWAY,
-    RESCUE_GPSLOST,
-    RESCUE_LOWSATS,
-    RESCUE_CRASH_FLIP_DETECTED,
-    RESCUE_STALLED,
-    RESCUE_TOO_CLOSE,
-    RESCUE_NO_HOME_POINT
-} rescueFailureState_e;
-
-typedef struct {
-    float maxAltitudeCm;
-    float returnAltitudeCm;
-    float targetAltitudeCm;
-    float targetLandingAltitudeCm;
-    float targetVelocityCmS;
-    float descentDistanceM;
-    int8_t secondsFailing;
-    float yawAttenuator;
-    float disarmThreshold;
-    uint32_t distanceToTargetCm;   // 타겟까지의 거리 (cm)
-    int32_t  directionToTargetCd;  // 타겟 방향 (0.01도 단위)
-} rescueIntent_s;
-
-typedef struct {
-    float currentAltitudeCm;
-    float distanceToHomeCm;
-    float distanceToHomeM;
-    uint16_t groundSpeedCmS;
-    int16_t directionToHome;
-    float accMagnitude;
-    bool healthy;
-    float errorAngle;
-    float gpsDataIntervalSeconds;
-    float altitudeDataIntervalSeconds;
-    float gpsRescueTaskIntervalSeconds;
-    float velocityToHomeCmS;
-    float absErrorAngle;
-    float imuYawCogGain;
-} rescueSensorData_s;
-
-typedef struct {
-    rescuePhase_e phase;
-    rescueFailureState_e failure;
-    rescueSensorData_s sensor;
-    rescueIntent_s intent;
-    bool isAvailable;
-} rescueState_s;
 
 /* ================================================================
  * 전역 변수 (Profile 3 튜닝 파라미터 매핑 포함)
@@ -182,8 +134,8 @@ static bool        aPointValid = false;      // rescuePointA가 정상적으로 
 static bool        shuttleTargetB   = false; // 현재 목적지가 B(True)인지 A(False)인지 여부
 static float       currentShuttleTrips = 0.0f; // 현재까지 완료한 왕복 횟수
 static bool        shuttleInfinite  = false; // 무한 셔틀 모드 (AUX 스위치 연동)
-static int32_t     currentVCLat     =    0; // OSD 표시용 현재 타겟 위도
-static int32_t     currentVCLon     =    0; // OSD 표시용 현재 타겟 경도
+int32_t     currentVCLat     =    0; // OSD 표시용 현재 타겟 위도
+int32_t     currentVCLon     =    0; // OSD 표시용 현재 타겟 경도
 static bool        descentAltReached = false; //  하강 고도 도달 여부 래치 (전 구간 감지용)
 static int8_t      turnDirectionSign = 0;     // 0: 자유, 1: 우회전 고정, -1: 좌회전 고정
 static bool        isDescentFalling = false;
@@ -237,8 +189,8 @@ static void  performSanityChecks(void);
 static void  sensorUpdate(void);
 static bool  checkGPSRescueIsAvailable(void);
 static void  setReturnAltitude(void);
-static void  rescueStart(void);
-static void  rescueStop(void);
+void gpsRescueStart(void);
+void gpsRescueStop(void);
 void         disarmOnImpact(void);
 void         initialiseRescueValues(void);
 static uint16_t getRescueAuxValue(void);
@@ -282,8 +234,8 @@ void gpsRescueInit(void)
 }
 
 void gpsRescueNewGpsData(void) { newGPSData = true; }
-static void rescueStart(void)  { rescueState.phase = RESCUE_INITIALIZE; }
-static void rescueStop(void)   { rescueState.phase = RESCUE_IDLE; }
+void gpsRescueStart(void)  { rescueState.phase = RESCUE_INITIALIZE; }
+void gpsRescueStop(void)   { rescueState.phase = RESCUE_IDLE; }
 
 // 셔틀 단계인지 판별
 static bool isShuttlePhase(rescuePhase_e phase)
@@ -1178,7 +1130,7 @@ void disarmOnImpact(void)
     if (rescueState.sensor.accMagnitude > rescueState.intent.disarmThreshold) {
         setArmingDisabled(ARMING_DISABLED_ARM_SWITCH);
         disarm(DISARM_REASON_GPS_RESCUE);
-        rescueStop();
+        gpsRescueStop();
     }
 }
 
@@ -1233,14 +1185,42 @@ static uint16_t getRescueAuxValue(void)
 void gpsRescueUpdate(void)
 {
     if (!FLIGHT_MODE(GPS_RESCUE_MODE)) {
-        rescueStop();
+        gpsRescueStop();
     } else if (FLIGHT_MODE(GPS_RESCUE_MODE) && rescueState.phase == RESCUE_IDLE) {
-        rescueStart(); rescueAttainPosition(); performSanityChecks();
+        // 3-way Aux 분기: <1400 셔틀 / 1400~1600 Autopilot / 1600+ Rescue
+        const uint16_t auxVal = getRescueAuxValue();
+        if (failsafeIsReceivingRxData() && auxVal < 1400) {
+            shuttleInfinite = true;
+            rescueState.intent.yawAttenuator = 1.0f;
+            initShuttlePoints();
+            rescueState.phase = RESCUE_SHUTTLE_INFINITE;
+#ifdef USE_FLIGHT_PLAN
+        } else if (failsafeIsReceivingRxData() && auxVal < 1600) {
+            missionStart();     // waypoint 있으면 WP #1, 없으면 Rescue로 넘어감
+#endif
+        } else {
+            gpsRescueStart();
+        }
+        rescueAttainPosition();
+        performSanityChecks();
     }
 
     sensorUpdate();
     bool initialVelocityLow = (rescueState.sensor.groundSpeedCmS < (float)gpsRescueConfig()->groundSpeedCmS);
     rescueState.isAvailable = checkGPSRescueIsAvailable();
+
+#ifdef USE_FLIGHT_PLAN
+    // Mission mode: target coordinates are set by mission, not by rescue state machine
+    if (missionIsActive()) {
+        missionUpdateTargetOnly();        // 타겟 좌표/고도/속도만 설정 (WP 전환 X)
+        rescueState.phase = RESCUE_FLY_HOME;
+        performSanityChecks();            // 안전 진단 (GPS 손실 등)
+        rescueAttainPosition();           // 현재 타겟으로 제어 실행
+        missionCheckAdvance();            // CPA 체크 + WP 전환
+        newGPSData = false;
+        return;                           // 기존 switch 분기 건너뜀
+    }
+#endif
 
     static rescuePhase_e lastPhase = RESCUE_IDLE;
     if (rescueState.phase != lastPhase) {
@@ -1280,7 +1260,7 @@ void gpsRescueUpdate(void)
 
             if (!STATE(GPS_FIX_HOME)) {
                 // home fix 없지만 GPS fix 있고 무한셔틀 트리거 → 헤딩 기반 무한셔틀 진입
-                if (STATE(GPS_FIX) && failsafeIsReceivingRxData() && getRescueAuxValue() < 1500) {
+                if (STATE(GPS_FIX) && failsafeIsReceivingRxData() && getRescueAuxValue() < 1400) {
                     initialiseRescueValues();
                     shuttleInfinite = true;
                     rescueState.intent.yawAttenuator = 1.0f;
@@ -1299,7 +1279,7 @@ void gpsRescueUpdate(void)
             } else {
                 initialiseRescueValues();
                 
-                if (failsafeIsReceivingRxData() && getRescueAuxValue() < 1500) {
+                if (failsafeIsReceivingRxData() && getRescueAuxValue() < 1400) {
                     shuttleInfinite = true; rescueState.intent.yawAttenuator = 1.0f;
                     initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE;
                 } else {
@@ -1317,7 +1297,7 @@ void gpsRescueUpdate(void)
             break;
 
         case RESCUE_ATTAIN_ALT:
-            if (failsafeIsReceivingRxData() && getRescueAuxValue() < 1500) {
+            if (failsafeIsReceivingRxData() && getRescueAuxValue() < 1400) {
                 shuttleInfinite = true; initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE; break;
             }
             if (attainAltStartTime == 0) attainAltStartTime = micros();
@@ -1330,7 +1310,7 @@ void gpsRescueUpdate(void)
 
 
 case RESCUE_FLY_HOME:
-    if (failsafeIsReceivingRxData() && getRescueAuxValue() < 1500) {
+    if (failsafeIsReceivingRxData() && getRescueAuxValue() < 1400) {
         shuttleInfinite = true; initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE; break;
     }
     float targetVelErr = gpsRescueConfig()->groundSpeedCmS - rescueState.intent.targetVelocityCmS;
@@ -1423,11 +1403,11 @@ case RESCUE_FLY_HOME:
             break;
 
         case RESCUE_SHUTTLE_INFINITE:
-            if (failsafeIsReceivingRxData() && getRescueAuxValue() >= 1500) rescueState.phase = RESCUE_INITIALIZE;
+            if (failsafeIsReceivingRxData() && getRescueAuxValue() >= 1400) rescueState.phase = RESCUE_INITIALIZE;
             break;
 
         case RESCUE_SHUTTLE_DESCENT:
-            if (failsafeIsReceivingRxData() && getRescueAuxValue() < 1500) {
+            if (failsafeIsReceivingRxData() && getRescueAuxValue() < 1400) {
                 shuttleInfinite = true; rescueState.phase = RESCUE_SHUTTLE_INFINITE; break;
             }
 
@@ -1441,7 +1421,7 @@ case RESCUE_FLY_HOME:
             break;
 
         case RESCUE_DESCENT:
-            if (failsafeIsReceivingRxData() && getRescueAuxValue() < 1500) {
+            if (failsafeIsReceivingRxData() && getRescueAuxValue() < 1400) {
                 shuttleInfinite = true; rescueState.phase = RESCUE_SHUTTLE_INFINITE; break;
             }
             // 랜딩 전환 조건: 홈30m이내 + 착륙고도(landingAlt) 모두 만족시 랜딩 시작
@@ -1454,7 +1434,7 @@ case RESCUE_FLY_HOME:
             disarmOnImpact();
             break;
 
-        case RESCUE_COMPLETE: rescueStop(); break;
+        case RESCUE_COMPLETE: gpsRescueStop(); break;
         case RESCUE_ABORT: rescueState.phase = RESCUE_DO_NOTHING; break;
         case RESCUE_DO_NOTHING: disarmOnImpact(); break;
         default: break;
@@ -1485,6 +1465,11 @@ int32_t gpsRescueGetTargetDirection(void) { return rescueState.intent.directionT
 
 char gpsRescueGetTargetLabel(void)
 {
+#ifdef USE_FLIGHT_PLAN
+    if (missionIsActive()) {
+        return 'W';  // Waypoint
+    }
+#endif
     if (isShuttlePhase(rescueState.phase)) {
         return shuttleTargetB ? 'B' : 'A';
     }

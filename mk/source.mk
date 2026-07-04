@@ -88,6 +88,7 @@ COMMON_SRC = \
             flight/position.c \
             flight/failsafe.c \
             flight/gps_rescue.c \
+            flight/mission.c \
             fc/gps_lap_timer.c \
             flight/dyn_notch_filter.c \
             flight/imu.c \
