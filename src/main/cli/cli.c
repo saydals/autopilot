@@ -191,6 +191,9 @@ static uint8_t cliWriteBuffer[CLI_OUT_BUFFER_SIZE];
 static char cliBuffer[CLI_IN_BUFFER_SIZE];
 static uint32_t bufferIndex = 0;
 
+static bool cliInteractive = true;
+static timeMs_t cliEntryTime = 0;
+
 static bool configIsInCopy = false;
 
 #define CURRENT_PROFILE_INDEX -1
@@ -3575,20 +3578,28 @@ static void cliBootloader(const char *cmdName, char *cmdline)
     cliRebootEx(rebootTarget);
 }
 
-static void cliExit(const char *cmdName, char *cmdline)
+static void cliExitMode(bool reboot)
+{
+    cliWriterFlush();
+    waitForSerialPortToFinishTransmitting(cliPort);
+    *cliBuffer = '\0';
+    bufferIndex = 0;
+    cliMode = false;
+    cliInteractive = true;
+    mixerResetDisarmedMotors();
+
+    if (reboot) {
+        cliReboot();
+    }
+}
+
+static void cliExitCommand(const char *cmdName, char *cmdline)
 {
     UNUSED(cmdName);
     UNUSED(cmdline);
 
     cliPrintHashLine("leaving CLI mode, unsaved changes lost");
-    cliWriterFlush();
-
-    *cliBuffer = '\0';
-    bufferIndex = 0;
-    cliMode = false;
-    // incase a motor was left running during motortest, clear it here
-    mixerResetDisarmedMotors();
-    cliReboot();
+    cliExitMode(true);
 }
 
 #ifdef USE_GPS
@@ -6696,7 +6707,7 @@ const clicmd_t cmdTable[] = {
 #ifdef USE_ESCSERIAL
     CLI_COMMAND_DEF("escprog", "passthrough esc to serial", "<mode [sk/bl/ki/cc]> <index>", cliEscPassthrough),
 #endif
-    CLI_COMMAND_DEF("exit", NULL, NULL, cliExit),
+    CLI_COMMAND_DEF("exit", NULL, NULL, cliExitCommand),
     CLI_COMMAND_DEF("feature", "configure features",
         "list\r\n"
         "\t<->[name]", cliFeature),
@@ -6936,7 +6947,7 @@ static void processCharacterInteractive(const char c)
         for (; i < bufferIndex; i++)
             cliWrite(cliBuffer[i]);
     } else if (!bufferIndex && c == 4) {   // CTRL-D
-        cliExit("", cliBuffer);
+        cliExitCommand("", cliBuffer);
         return;
     } else if (c == 12) {                  // NewPage / CTRL-L
         // clear screen
@@ -6953,42 +6964,66 @@ static void processCharacterInteractive(const char c)
     }
 }
 
-void cliProcess(void)
+bool cliProcess(void)
 {
-    if (!cliWriter) {
-        return;
+    if (!cliWriter || !cliMode) {
+        return false;
     }
 
-    // Flush the buffer to get rid of any MSP data polls sent by configurator after CLI was invoked
     cliWriterFlush();
 
     while (serialRxBytesWaiting(cliPort)) {
         uint8_t c = serialRead(cliPort);
 
-        processCharacterInteractive(c);
+        if (!cliInteractive) {
+            // 비대화형 모드: ETX(0x03) 또는 2초 타임아웃으로 종료
+            if (c == 0x03 || (millis() - cliEntryTime > 2000)) {
+                cliWrite(0x03);  // ETX 응답
+                cliExitMode(false);
+                return cliMode;
+            }
+            // 일반 문자 처리 (프롬프트/에코 없음)
+            processCharacter(c);
+        } else {
+            processCharacterInteractive(c);
+        }
     }
+
+    cliWriterFlush();
+    return cliMode;
 }
 
-void cliEnter(serialPort_t *serialPort)
+void cliEnter(serialPort_t *serialPort, bool interactive)
 {
     cliMode = true;
+    cliInteractive = interactive;
     cliPort = serialPort;
-    setPrintfSerialPort(cliPort);
+    cliEntryTime = millis();
+    *cliBuffer = '\0';
+    bufferIndex = 0;
+
+    if (interactive) {
+        setPrintfSerialPort(cliPort);
+    }
+
     bufWriterInit(&cliWriterDesc, cliWriteBuffer, sizeof(cliWriteBuffer), (bufWrite_t)serialWriteBufBlockingShim, serialPort);
     cliErrorWriter = cliWriter = &cliWriterDesc;
 
+    if (interactive) {
 #ifndef MINIMAL_CLI
-    cliPrintLine("\r\nEntering CLI Mode, type 'exit' to return, or 'help'");
+        cliPrintLine("\r\nEntering CLI Mode, type 'exit' to return, or 'help'");
 #else
-    cliPrintLine("\r\nCLI");
+        cliPrintLine("\r\nCLI");
 #endif
-    setArmingDisabled(ARMING_DISABLED_CLI);
-
-    cliPrompt();
-
+        setArmingDisabled(ARMING_DISABLED_CLI);
+        cliPrompt();
 #ifdef USE_CLI_BATCH
-    resetCommandBatch();
+        resetCommandBatch();
 #endif
+    } else {
+        // 비대화형 모드: STX ACK 전송
+        cliWrite(0x02);
+    }
 }
 
 #endif // USE_CLI

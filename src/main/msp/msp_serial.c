@@ -476,7 +476,7 @@ static void mspProcessPendingRequest(mspPort_t * mspPort)
 #endif
 #ifdef USE_CLI
     case MSP_PENDING_CLI:
-        cliEnter(mspPort->port);
+        cliEnter(mspPort->port, true);
         break;
 #endif
 
@@ -523,6 +523,15 @@ void mspSerialProcess(mspEvaluateNonMspData_e evaluateNonMspData, mspProcessComm
 
             while (serialRxBytesWaiting(mspPort->port)) {
                 const uint8_t c = serialRead(mspPort->port);
+
+#ifdef USE_CLI
+                // STX(0x02) 감지 → 즉시 비대화형 CLI 진입
+                if (c == 0x02) {
+                    cliEnter(mspPort->port, false);
+                    break;  // 나머지 바이트는 cliProcess()가 처리
+                }
+#endif
+
                 const bool consumed = mspSerialProcessReceivedData(mspPort, c);
 
                 if (!consumed && evaluateNonMspData == MSP_EVALUATE_NON_MSP_DATA) {
