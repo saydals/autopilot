@@ -1,7 +1,7 @@
 # Autopilot (Waypoint Mission) 사용자 가이드
 
-> **적용 펌웨어**: my-betaflight autopilot 브랜치  
-> **필요 Configurator**: betaflight.github.io (최신 버전)
+> **적용 펌웨어**: my-betaflight autopilot 브랜치 (커밋 8a3bf7e+)
+> **필요 Configurator**: betaflight.github.io (최신 버전, FlightPlan 탭 지원)
 
 ---
 
@@ -63,26 +63,26 @@
 
 1. **FlightPlan** 탭 클릭
 2. 지도에서 원하는 지점을 클릭하여 Waypoint 추가
-3. 각 Waypoint의 **고도(ft)**와 **속도(knots)** 설정
-4. Waypoint **유형(Type)** 선택: ( 현재 Flyover만 구현됨 )
+3. 각 Waypoint의 **고도**와 **속도** 설정 (Configurator UI에서 ft/knots 단위로 표시, 내부는 cm/cm-s)
+4. Waypoint **유형(Type)** 선택: (8가지 전체 지원)
    - `FLYOVER`: 경유 후 다음 목적지로 이동 (기본)
    - `FLYBY`: 경유하되 선회 반경 설정
    - `HOLD`: 지정된 패턴으로 선회
    - `LAND`: 해당 좌표로 착륙
 5. **저장(Save)** 버튼 클릭 → 자동으로 CLI 명령 실행
 
-> ⚠️ **참고**: Waypoint는 RAM에만 저장됩니다. 전원을 끄면 사라지므로, 비행 전 반드시 Configurator에서 다시 업로드하세요.
+> 💡 Waypoint는 `save` 명령 또는 FlightPlan Save 버튼을 통해 Flash(EEPROM)에 저장되며, 재부팅 후에도 유지됩니다.
 
 ### 4.3 CLI 명령 (고급 사용자)
 
-Configurator 대신 CLI에서 직접 Waypoint를 관리할 수 있습니다: ( 현재 램에만 저장하기때문에 불가능 )
+Configurator 대신 CLI에서 직접 Waypoint를 관리할 수 있습니다:
 
 ```bash
 # Waypoint 목록 보기
 waypoint list
 
 # Waypoint 삽입 (8개 인자)
-waypoint insert 0 37.1234567 127.1234567 400 10 FLYOVER 0 ORBIT
+waypoint insert 0 37.1234567 127.1234567 12192 514 FLYOVER 0 ORBIT
 
 # 모든 Waypoint 삭제
 waypoint clear
@@ -98,10 +98,10 @@ save
 | 0    | 인덱스   | -          | 0                |
 | 1    | 위도     | 도 (float) | 37.1234567       |
 | 2    | 경도     | 도 (float) | 127.1234567      |
-| 3    | 고도     | feet       | 400              |
-| 4    | 속도     | knots      | 10               |
+| 3    | 고도     | cm        | 12192            |
+| 4    | 속도     | cm/s      | 514              |
 | 5    | 유형     | 문자열     | FLYOVER          |
-| 6    | 지속시간 | 분         | 0 (HOLD/DELAY용) |
+| 6    | 지속시간 | deciseconds | 0 (HOLD/DELAY용)  |
 | 7    | 패턴     | 문자열     | ORBIT            |
 
 ---
@@ -138,7 +138,7 @@ CLI에서 Waypoint를 직접 관리할 수 있습니다.
 
 ```
 # Waypoint count: 2
-waypoint insert 0 37.1234567 127.1234567 400 10 FLYOVER 0 ORBIT
+waypoint insert 0 37.1234567 127.1234567 12192 514 FLYOVER 0 ORBIT
 waypoint insert 1 37.2345678 127.2345678 300 15 FLYBY 2 FIGURE8
 ```
 
@@ -146,7 +146,7 @@ waypoint insert 1 37.2345678 127.2345678 300 15 FLYBY 2 FIGURE8
 새 Waypoint를 추가합니다. 인덱스는 0부터 시작합니다.
 
 ```
-waypoint insert <인덱스> <위도> <경도> <고도_ft> <속도_knots> <타입> <지속시간_min> <패턴>
+waypoint insert <인덱스> <위도> <경도> <고도_cm> <속도_cm/s> <타입> <지속시간_ds> <패턴>
 ```
 
 | 인자 | 예시 | 단위 | 설명 |
@@ -154,11 +154,25 @@ waypoint insert <인덱스> <위도> <경도> <고도_ft> <속도_knots> <타입
 | 인덱스 | `0` | - | 0부터 14까지 (15개 제한) |
 | 위도 | `37.1234567` | 도 (float) | 소수점 7자리 |
 | 경도 | `127.1234567` | 도 (float) | 소수점 7자리 |
-| 고도 | `400` | feet | 정수 |
-| 속도 | `10` | knots | 정수 |
+| 고도 | `12192` | cm | 정수 (400ft = 12192cm) |
+| 속도 | `514` | cm/s | 정수 (10knots = 514cm/s, YAW_RATE일 때는 deg/s) |
 | 타입 | `FLYOVER` | 문자열 | `FLYOVER` / `FLYBY` / `HOLD` / `LAND` / `TAKEOFF` / `ALT_CHANGE` / `DELAY` / `YAW_RATE` |
-| 지속시간 | `0` | 분 | `HOLD`/`DELAY` 타입용 |
+| 지속시간 | `0` | deciseconds | `HOLD`/`DELAY` 타입용 (30초 = 300ds) |
 | 패턴 | `ORBIT` | 문자열 | `ORBIT` / `FIGURE8` |
+
+### waypoint update
+기존 Waypoint를 수정합니다. insert와 동일한 인자를 사용합니다.
+
+```
+waypoint update <인덱스> <위도> <경도> <고도_cm> <속도_cm/s> <타입> <지속시간_ds> <패턴>
+```
+
+### waypoint remove
+지정 인덱스의 Waypoint를 삭제합니다.
+
+```
+waypoint remove <인덱스>
+```
 
 ### waypoint clear
 모든 Waypoint를 삭제합니다.
@@ -167,12 +181,26 @@ waypoint insert <인덱스> <위도> <경도> <고도_ft> <속도_knots> <타입
 waypoint clear
 ```
 
+### waypoint status
+현재 Waypoint 개수와 진행 상태를 확인합니다.
+
+```
+waypoint status
+```
+
+### waypoint list
+등록된 모든 Waypoint를 출력합니다.
+
+```
+waypoint list
+```
+
 ### dump / diff
 전체 설정을 출력할 때 Waypoint도 함께 표시됩니다.
 
 ```
 # waypoints
-waypoint insert 0 37.1234567 127.1234567 400 10 FLYOVER 0 ORBIT
+waypoint insert 0 37.1234567 127.1234567 12192 514 FLYOVER 0 ORBIT
 ```
 
 > ⚠️ **저장**: Waypoint는 `save` 명령어로 Flash에 저장되며, 재부팅 후에도 유지됩니다 (`save` 필요).
