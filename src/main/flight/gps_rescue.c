@@ -1293,7 +1293,13 @@ void gpsRescueUpdate(void)
                 if (failsafeIsReceivingRxData() && getRescueAuxValue() < 1400) {
                     shuttleInfinite = true; rescueState.intent.yawAttenuator = 1.0f;
                     initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE;
-                } else {
+                }
+#ifdef USE_FLIGHT_PLAN
+                else if (failsafeIsReceivingRxData() && getRescueAuxValue() < 1600) {
+                    missionStart();  // Waypoint 있으면 Autopilot, 없으면 Rescue
+                }
+#endif
+                else {
                     shuttleInfinite = false;
                     // 현재 고도가 목표 고도보다  높으면 바로 FLY_HOME으로 진입
                     if (rescueState.sensor.currentAltitudeCm >= rescueState.intent.returnAltitudeCm) {
@@ -1308,8 +1314,16 @@ void gpsRescueUpdate(void)
             break;
 
         case RESCUE_ATTAIN_ALT:
-            if (failsafeIsReceivingRxData() && getRescueAuxValue() < 1400) {
-                shuttleInfinite = true; initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE; break;
+            if (failsafeIsReceivingRxData()) {
+                const uint16_t aux = getRescueAuxValue();
+                if (aux < 1400) {
+                    shuttleInfinite = true; initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE; break;
+                }
+#ifdef USE_FLIGHT_PLAN
+                if (aux < 1600) {
+                    missionStart(); break;
+                }
+#endif
             }
             if (attainAltStartTime == 0) attainAltStartTime = micros();
             if (cmpTimeUs(micros(), attainAltStartTime) >= ATTAIN_ALT_TIMEOUT_US ||
@@ -1321,8 +1335,16 @@ void gpsRescueUpdate(void)
 
 
 case RESCUE_FLY_HOME:
-    if (failsafeIsReceivingRxData() && getRescueAuxValue() < 1400) {
-        shuttleInfinite = true; initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE; break;
+    if (failsafeIsReceivingRxData()) {
+        const uint16_t aux = getRescueAuxValue();
+        if (aux < 1400) {
+            shuttleInfinite = true; initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE; break;
+        }
+#ifdef USE_FLIGHT_PLAN
+        if (aux < 1600) {
+            missionStart(); break;
+        }
+#endif
     }
     float targetVelErr = gpsRescueConfig()->groundSpeedCmS - rescueState.intent.targetVelocityCmS;
     bool targetVelocityIsLow = rescueState.intent.targetVelocityCmS < gpsRescueConfig()->groundSpeedCmS;
