@@ -157,7 +157,7 @@
 #define PG_SCHEDULER_CONFIG         556
 #define PG_MSP_CONFIG               557
 #define PG_SOFTSERIAL_PIN_CONFIG    558
-#define PG_MISSION_CONFIG           559
+#define PG_MISSION_CONFIG           560
 #define PG_BETAFLIGHT_END           559
 
 
