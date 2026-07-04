@@ -525,8 +525,8 @@ void mspSerialProcess(mspEvaluateNonMspData_e evaluateNonMspData, mspProcessComm
                 const uint8_t c = serialRead(mspPort->port);
 
 #ifdef USE_CLI
-                // STX(0x02) 감지 → 즉시 비대화형 CLI 진입
-                if (c == 0x02) {
+                // MSP IDLE 상태에서만 STX(0x02) 감지 (MSP 패킷 처리 중 간섭 방지)
+                if (mspPort->c_state == MSP_IDLE && c == 0x02) {
                     cliEnter(mspPort->port, false);
                     break;  // 나머지 바이트는 cliProcess()가 처리
                 }
