@@ -40,8 +40,10 @@
 #include "flight/gps_rescue.h"
 #include "mission.h"
 
+#include "pg/mission.h"
+
 /* ================================================================
- * 미션 저장소 (RAM-only)
+ * 미션 저장소 (PG-backed RAM copy)
  * ================================================================ */
 
 missionWaypoint_t missionWaypoints[MAX_MISSION_WAYPOINTS];
@@ -224,10 +226,29 @@ bool missionCheckAdvance(void)
  * 데이터 접근 함수
  * ================================================================ */
 
+void missionInit(void)
+{
+    // PG에서 waypoint 복원 (save/reboot 시 유지됨)
+    const missionConfig_t *cfg = missionConfig();
+    missionWpCount = cfg->waypointCount;
+    for (int i = 0; i < missionWpCount; i++) {
+        missionWaypoints[i] = cfg->waypoints[i];
+    }
+    currentMissionWpIndex = 0;
+    isMissionActive = false;
+    wpEntryTime = 0;
+    prevDistCm = -1.0f;
+    wasClosing = false;
+}
+
 void missionClear(void)
 {
     memset(missionWaypoints, 0, sizeof(missionWaypoints));
     missionWpCount = 0;
+
+    // PG에도 반영
+    missionConfigMutable()->waypointCount = 0;
+    memset(missionConfigMutable()->waypoints, 0, sizeof(missionConfigMutable()->waypoints));
 }
 
 bool missionInsert(int idx, const missionWaypoint_t *wp)
@@ -243,6 +264,13 @@ bool missionInsert(int idx, const missionWaypoint_t *wp)
 
     memcpy(&missionWaypoints[idx], wp, sizeof(missionWaypoint_t));
     missionWpCount++;
+
+    // PG에도 반영
+    missionConfigMutable()->waypointCount = missionWpCount;
+    for (int i = 0; i < missionWpCount; i++) {
+        missionConfigMutable()->waypoints[i] = missionWaypoints[i];
+    }
+
     return true;
 }
 

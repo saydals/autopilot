@@ -216,6 +216,11 @@ void gpsRescueInit(void)
     // 시스템 초기화 단계에서 Profile 3 파라미터를 1회 로드
     updateRescueParams();
 
+#ifdef USE_FLIGHT_PLAN
+    // PG에서 waypoint 복원 (save 후 재부팅 시 유지)
+    missionInit();
+#endif
+
     rescueState.sensor.gpsRescueTaskIntervalSeconds = HZ_TO_INTERVAL(TASK_GPS_RESCUE_RATE_HZ);
     float cutoffHz, gain;
 
