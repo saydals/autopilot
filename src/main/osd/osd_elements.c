@@ -148,6 +148,10 @@
 #include "fc/runtime_config.h"
 
 #include "flight/gps_rescue.h"
+
+#ifdef USE_FLIGHT_PLAN
+#include "flight/mission.h"
+#endif
 #include "flight/position.h"
 #include "flight/imu.h"
 #include "flight/mixer.h"
@@ -1090,6 +1094,16 @@ static void osdElementReadyMode(osdElementParms_t *element)
         strcpy(element->buff, "READY");
         return;
     }
+
+#ifdef USE_FLIGHT_PLAN
+    // Mission 진행 표시 (AUTO-현재WP/전체WP)
+    if (missionIsActive()) {
+        tfp_sprintf(element->buff, "AUTO-%d/%d",
+            (int)currentMissionWpIndex + 1,
+            (int)missionWpCount);
+        return;
+    }
+#endif
 
 #ifdef USE_GPS_RESCUE
     const rescuePhase_e phase = gpsRescueGetPhase();
