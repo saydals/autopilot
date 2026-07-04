@@ -129,6 +129,56 @@ save
 
 ---
 
+## 5.4 CLI 명령어
+
+CLI에서 Waypoint를 직접 관리할 수 있습니다.
+
+### waypoint list
+등록된 모든 Waypoint를 **Configurator 호환 형식**으로 출력합니다.
+
+```
+# Waypoint count: 2
+waypoint insert 0 37.1234567 127.1234567 400 10 FLYOVER 0 ORBIT
+waypoint insert 1 37.2345678 127.2345678 300 15 FLYBY 2 FIGURE8
+```
+
+### waypoint insert
+새 Waypoint를 추가합니다. 인덱스는 0부터 시작합니다.
+
+```
+waypoint insert <인덱스> <위도> <경도> <고도_ft> <속도_knots> <타입> <지속시간_min> <패턴>
+```
+
+| 인자 | 예시 | 단위 | 설명 |
+|---|---|---|---|
+| 인덱스 | `0` | - | 0부터 14까지 (15개 제한) |
+| 위도 | `37.1234567` | 도 (float) | 소수점 7자리 |
+| 경도 | `127.1234567` | 도 (float) | 소수점 7자리 |
+| 고도 | `400` | feet | 정수 |
+| 속도 | `10` | knots | 정수 |
+| 타입 | `FLYOVER` | 문자열 | `FLYOVER` / `FLYBY` / `HOLD` / `LAND` / `TAKEOFF` / `ALT_CHANGE` / `DELAY` / `YAW_RATE` |
+| 지속시간 | `0` | 분 | `HOLD`/`DELAY` 타입용 |
+| 패턴 | `ORBIT` | 문자열 | `ORBIT` / `FIGURE8` |
+
+### waypoint clear
+모든 Waypoint를 삭제합니다.
+
+```
+waypoint clear
+```
+
+### dump / diff
+전체 설정을 출력할 때 Waypoint도 함께 표시됩니다.
+
+```
+# waypoints
+waypoint insert 0 37.1234567 127.1234567 400 10 FLYOVER 0 ORBIT
+```
+
+> ⚠️ **저장**: Waypoint는 `save` 명령어로 Flash에 저장되며, 재부팅 후에도 유지됩니다 (`save` 필요).
+
+---
+
 ## 6. 비행 중 표시 (OSD)
 
 OSD에 현재 모드와 진행 상태가 나타납니다:
@@ -210,7 +260,7 @@ OSD에 현재 모드와 진행 상태가 나타납니다:
 
 ⚠️ **속도 제한**: Waypoint 속도보다 Rescue에 설정된 최소 속도(`groundSpeedCmS`)가 더 크면 Rescue 속도가 우선 적용됩니다 (실속 방지).
 
-⚠️ **RAM 저장**: Waypoint는 RAM에만 저장되므로 전원 사이클 시 소멸됩니다. 비행 전 Configurator에서 반드시 다시 업로드하세요.
+⚠️ **저장**: Waypoint는 `save` 명령 시 Flash에 저장되어 재부팅 후에도 유지됩니다. 단, `save` 없이 전원을 끄면 소멸됩니다.
 
 ⚠️ **Configurator 버전**: 반드시 최신 Betaflight Configurator (master.app.betaflight.com)를 사용하세요. 구버전 Configurator에는 FlightPlan 탭이 없습니다.
 
