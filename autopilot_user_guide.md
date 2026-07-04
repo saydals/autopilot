@@ -137,14 +137,25 @@ save
 
 ## 6. 비행 중 표시 (OSD)
 
-OSD Flymode 표시에 현재 모드가 나타납니다:
+OSD에 현재 모드와 진행 상태가 나타납니다:
 
-| 표시               | 모드                    |
-| ------------------ | ----------------------- |
-| `WPn` (레이블 `W`) | Waypoint #n으로 비행 중 |
-| `RESC`             | Rescue 모드             |
-| `A` / `B`          | 셔틀 모드               |
-| `H`                | Home 귀환 중            |
+### Ready Mode (OSD_READY_MODE 요소)
+
+| 표시 | 의미 |
+|---|---|
+| `AUTO-1/4` | Waypoint 미션 진행 중 (현재 1/4) |
+| `FLY HOME` | Rescue - Home 귀환 중 |
+| `CLIMB` | Rescue - 상승 중 |
+| `DESCEND` | Rescue - 하강 중 |
+| `SHUT-001` | 셔틀 모드 (왕복 횟수) |
+
+### GPS 좌표 라벨 (GPS 좌표 필드 접두어)
+
+| 표시 | 의미 |
+|---|---|
+| `W` | Waypoint 방향으로 비행 중 |
+| `A` / `B` | 셔틀 A/B 포인트 방향 |
+| `H` | Home 귀환 중 |
 
 ---
 
