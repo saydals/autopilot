@@ -4947,22 +4947,31 @@ static void cliWaypoint(const char *cmdName, char *cmdline)
         cliPrintLinef("# Waypoint count: %d", missionWpCount);
         for (int i = 0; i < missionWpCount; i++) {
             missionWaypoint_t *wp = &missionWaypoints[i];
-            const float latDeg = (float)wp->latitude / 1e7f;
-            const float lonDeg = (float)wp->longitude / 1e7f;
-            const float altFeet = wp->altitude / 30.48f;
-            const float durationMin = wp->duration / 600.0f;
-            float speedDisplay;
+            // lat/lon: int32_t(1e-7 deg) → 정수.소수7자리
+            int latInt = (int)(wp->latitude / 10000000);
+            int latFrac = wp->latitude >= 0 ? (wp->latitude % 10000000) : (-wp->latitude % 10000000);
+            int lonInt = (int)(wp->longitude / 10000000);
+            int lonFrac = wp->longitude >= 0 ? (wp->longitude % 10000000) : (-wp->longitude % 10000000);
+            // alt: cm → feet (반올림)
+            int altFt = (int)(wp->altitude / 30.48f + 0.5f);
+            // speed: YAW_RATE=deg/s, else cm/s → knots
+            int speedVal;
             if (wp->type == WP_TYPE_YAW_RATE) {
-                speedDisplay = wp->speed;  // deg/s, 그대로 출력
+                speedVal = (int)(wp->speed + 0.5f);
             } else {
-                speedDisplay = wp->speed / 51.4444f;  // cm/s → knots
+                speedVal = (int)(wp->speed / 51.4444f + 0.5f);
             }
-            cliPrintLinef("waypoint insert %d %.7f %.7f %.0f %.0f %s %.1f %s",
+            // duration: deciseconds → minutes (정수.소수1자리)
+            int durInt = (int)(wp->duration / 600.0f);
+            int durFrac = (int)((wp->duration * 10.0f) / 600.0f) % 10;
+            cliPrintLinef("waypoint insert %d %d.%07d %d.%07d %d %d %s %d.%d %s",
                 i,
-                (double)latDeg, (double)lonDeg,
-                (double)altFeet, (double)speedDisplay,
+                latInt, latFrac,
+                lonInt, lonFrac,
+                altFt,
+                speedVal,
                 wpTypeToStr(wp->type),
-                (double)durationMin,
+                durInt, durFrac,
                 wpPatternToStr(wp->pattern));
         }
     } else if (strcasecmp(cmdline, "clear") == 0) {
