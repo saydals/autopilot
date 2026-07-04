@@ -4936,7 +4936,28 @@ static void cliVersion(const char *cmdName, char *cmdline)
     printVersion(true);
 }
 
+
 #ifdef USE_FLIGHT_PLAN
+static void formatCoordinate(char *buf, int32_t coord)
+{
+    char *p = buf;
+    if (coord < 0) {
+        *p++ = '-';
+        coord = -coord;
+    }
+    uint32_t deg = (uint32_t)(coord / 10000000);
+    tfp_sprintf(p, "%u.", deg);
+    while (*p) p++;
+    uint32_t frac = (uint32_t)(coord % 10000000);
+    uint32_t div = 1000000;
+    while (div) {
+        *p++ = '0' + (frac / div);
+        frac %= div;
+        div /= 10;
+    }
+    *p = '\0';
+}
+
 static void cliWaypoint(const char *cmdName, char *cmdline)
 {
     if (strcasecmp(cmdline, "list") == 0) {
@@ -4947,11 +4968,10 @@ static void cliWaypoint(const char *cmdName, char *cmdline)
         cliPrintLinef("# Waypoint count: %d", missionWpCount);
         for (int i = 0; i < missionWpCount; i++) {
             missionWaypoint_t *wp = &missionWaypoints[i];
-            // lat/lon: int32_t(1e-7 deg) → 정수.소수7자리
-            int latInt = (int)(wp->latitude / 10000000);
-            int latFrac = wp->latitude >= 0 ? (wp->latitude % 10000000) : (-wp->latitude % 10000000);
-            int lonInt = (int)(wp->longitude / 10000000);
-            int lonFrac = wp->longitude >= 0 ? (wp->longitude % 10000000) : (-wp->longitude % 10000000);
+            // lat/lon: formatCoordinate() → "37.1234567" 형태 문자열 생성
+            char latStr[20], lonStr[20];
+            formatCoordinate(latStr, wp->latitude);
+            formatCoordinate(lonStr, wp->longitude);
             // alt: cm → feet (반올림)
             int altFt = (int)(wp->altitude / 30.48f + 0.5f);
             // speed: YAW_RATE=deg/s, else cm/s → knots
@@ -4964,10 +4984,9 @@ static void cliWaypoint(const char *cmdName, char *cmdline)
             // duration: deciseconds → minutes (정수.소수1자리)
             int durInt = (int)(wp->duration / 600.0f);
             int durFrac = (int)((wp->duration * 10.0f) / 600.0f) % 10;
-            cliPrintLinef("waypoint insert %d %d.%07d %d.%07d %d %d %s %d.%d %s",
+            cliPrintLinef("waypoint insert %d %s %s %d %d %s %d.%d %s",
                 i,
-                latInt, latFrac,
-                lonInt, lonFrac,
+                latStr, lonStr,
                 altFt,
                 speedVal,
                 wpTypeToStr(wp->type),
