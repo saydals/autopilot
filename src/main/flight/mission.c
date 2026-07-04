@@ -75,7 +75,14 @@ static void missionApplyWaypoint(void)
 
 void missionStart(void)
 {
-    if (gpsRescueGetPhase() != RESCUE_IDLE) {
+    // Rescue 재진입 허용: 하강/착륙/비상 단계가 아니면 Autopilot 재시작 가능
+    const rescuePhase_e phase = gpsRescueGetPhase();
+    if (phase == RESCUE_DESCENT ||
+        phase == RESCUE_LANDING ||
+        phase == RESCUE_SHUTTLE_DESCENT ||
+        phase == RESCUE_ABORT ||
+        phase == RESCUE_DO_NOTHING ||
+        phase == RESCUE_COMPLETE) {
         return;
     }
     if (missionWpCount == 0) {
