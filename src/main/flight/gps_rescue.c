@@ -1218,10 +1218,15 @@ void gpsRescueUpdate(void)
             missionStop();  // 미션 중단 → 아래 switch로 fall-through
         } else {
             missionUpdateTargetOnly();        // 타겟 좌표/고도/속도만 설정 (WP 전환 X)
-            rescueState.phase = RESCUE_FLY_HOME;
-            performSanityChecks();            // 안전 진단 (GPS 손실 등)
-            rescueAttainPosition();           // 현재 타겟으로 제어 실행
-            missionCheckAdvance();            // CPA 체크 + WP 전환
+            // ABORT/DO_NOTHING/LANDING 감지로 missionStop() 된 경우 → switch로 fall-through
+            if (!missionIsActive()) {
+                // rescueState.phase는 missionStop()에서 이미 설정됨 (FLY_HOME or SHUTTLE_INFINITE)
+            } else {
+                rescueState.phase = RESCUE_FLY_HOME;
+                performSanityChecks();            // 안전 진단 (GPS 손실 등)
+                rescueAttainPosition();           // 현재 타겟으로 제어 실행
+                missionCheckAdvance();            // CPA 체크 + WP 전환
+            }
             newGPSData = false;
             return;                           // 기존 switch 분기 건너뜀
         }
