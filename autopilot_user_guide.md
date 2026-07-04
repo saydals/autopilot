@@ -125,14 +125,7 @@ save
 
 ### 5.3 도중 전환
 
-AUX 스위치로 모드를 전환할 수 있습니다. 단, 하강/착륙 단계에서는 전환이 제한됩니다:
-
-| 현재 상태 | AUX < 1400 (셔틀) | AUX 1400~1600 (Autopilot) | AUX ≥ 1600 (Rescue) |
-|---|---|---|---|
-| Autopilot (Mission) | 셔틀 전환 ✅ | 유지 | Rescue 전환 ✅ |
-| Rescue (CLIMB/FLY HOME) | 셔틀 전환 ✅ | Autopilot 전환 ✅ | 유지 |
-| Shuttle (셔틀) | 유지 | Autopilot 전환 ✅ | Rescue 전환 ✅ |
-| **하강/착륙 중** (DESCENT/LANDING) | ❌ 전환 불가 | ❌ 전환 불가 | ❌ 전환 불가 |
+하강/착륙 중이 아니라면 AUX 스위치로 셔틀 ↔ Autopilot ↔ Rescue 자유롭게 전환할 수 있습니다.
 
 ---
 
