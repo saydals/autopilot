@@ -1,3 +1,6 @@
+<!-- PROFILE 3 RESCUE: Arming with Profile 3 auto-switches to Profile 1. See core.c tryArm(). -->
+
+
 # Betaflight Custom Firmware for Fixed-Wing
 
 본 프로젝트는 [Betaflight](https://github.com/betaflight/betaflight) 4.5.3을 기반으로 **RC 고정익(비행기)** 에 최적화된 개조 펌웨어입니다...

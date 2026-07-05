@@ -547,6 +547,13 @@ void tryArm(void)
 #ifdef USE_RPM_LIMIT
         mixerResetRpmLimiter();
 #endif
+        
+        // Profile 3으로 아밍 시도 시 Profile 1로 강제 전환
+        // (Profile 3은 Rescue 전용 매핑이므로 비행용으로 사용 금지)
+        if (systemConfig()->pidProfileIndex == 2) {  // 0-based: 2 = Profile 3
+            changePidProfile(0);  // Profile 1로 강제 전환
+        }
+
         ENABLE_ARMING_FLAG(ARMED);
 
 #ifdef USE_RC_STATS
