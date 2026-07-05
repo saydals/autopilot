@@ -105,13 +105,22 @@ Autopilot 어느 단계에서든지 Aux키 명령으로 다른 단계 ( 무한�
 
 1. **FlightPlan** 탭 클릭
 2. 지도에서 원하는 지점을 클릭하여 Waypoint 추가
-3. 각 Waypoint의 **고도**와 **속도** 설정 (Configurator UI에서 ft/knots 단위로 표시, 내부는 cm/cm-s)
-4. Waypoint **유형(Type)** 선택: (8가지 전체 지원)
+3. 각 Waypoint의 **고도**와 **속도** 설정
+4. Waypoint **유형(Type)** 선택 (8가지 전체 저장 가능):
    - `FLYOVER`: 경유 후 다음 목적지로 이동 (기본)
    - `FLYBY`: 경유하되 선회 반경 설정
    - `HOLD`: 지정된 패턴으로 선회
    - `LAND`: 해당 좌표로 착륙
+   - `TAKEOFF`: 이륙 절차
+   - `ALT_CHANGE`: 고도 변경
+   - `DELAY`: 지정 시간 대기
+   - `YAW_RATE`: 회전율 설정
+   
+   > ⚠️ **현재 구현**: 위 8가지 타입 모두 저장은 가능하나, 모든 타입의 **실제 비행 동작은 `FLYOVER`와 동일**합니다. (위치/고도/속도 위주 비행)
 5. **저장(Save)** 버튼 클릭 → 자동으로 CLI 명령 실행
+
+> 💡 **단위 변환 참고**: Configurator UI는 ft/knots/minutes 단위로 표시하지만, 펌웨어 내부는 cm/cm-s/deciseconds로 처리합니다.  
+> 예: UI 400ft → `altitude: 12192` (cm), UI 10knots → `speed: 514` (cm/s), UI 0min → `duration: 0` (deciseconds)
 
 > 💡 Waypoint는 `save` 명령 또는 FlightPlan Save 버튼을 통해 Flash(EEPROM)에 저장되며, 재부팅 후에도 유지됩니다.
 
@@ -310,7 +319,7 @@ OSD에 현재 모드와 진행 상태가 나타납니다:
 
 ### 7.2 Home 미설정 시
 
-- Home 포인트가 없으면 모든 Waypoint 완료 후 **마지막 Waypoint 주변 선회** 유지
+- Home 포인트가 없으면 모든 Waypoint 완료 후 **현재 위치 기준 헤딩 기반 무한셔틀 모드**로 전환 (A-B 포인트 무한 왕복)
 - Home 포인트가 있으면 자동 **Home 귀환**
 
 ### 7.3 GPS 손실 시
@@ -320,8 +329,8 @@ OSD에 현재 모드와 진행 상태가 나타납니다:
 
 ### 7.4 무장(ARM) 상태 보호
 
-- 비행 중(ARMED)에는 CLI `waypoint insert/clear` 명령이 차단됨
-- `waypoint list` 조회만 가능
+- 비행 중(ARMED)에는 CLI `waypoint insert/clear/update/remove` 명령이 차단됨
+- `waypoint list` 및 `waypoint status` 조회만 가능
 
 ---
 

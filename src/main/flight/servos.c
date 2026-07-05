@@ -763,10 +763,10 @@ static bool isWiggleGpsReady(void)
     return STATE(GPS_FIX) && (gpsSol.numSat >= gpsRescueConfig()->minSats);
 }
 
-// 엘리베이터 위글 조건: GPS OK 또는 Waypoint 존재
+// 엘리베이터 위글 조건: GPS OK (Waypoint만으로는 Phase 1 엘리베이터 위글 없음)
 static bool isWiggleElevatorReady(void)
 {
-    return isWiggleGpsReady() || (missionWpCount > 0);
+    return isWiggleGpsReady();
 }
 
 // 확장 위글 조건: Waypoint 존재 → 엘리베이터 단독 2단계 위글
