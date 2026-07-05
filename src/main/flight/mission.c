@@ -111,25 +111,15 @@ void missionStop(void)
     // Home Fix 유무에 따라 분기
     if (STATE(GPS_FIX_HOME)) {
         // Home point 있음 → Home 귀환
-        // RESCUE_INITIALIZE 수준의 상태 초기화: CPA/셔틀/고도 래치 리셋
-        shuttleInfinite = false;
-        currentShuttleTrips = 0.0f;
-        shuttleTargetB = false;
-        attainAltStartTime = 0;
-        cpaDistToTargetCm = -1.0f;
-        cpaWasClosing = false;
-        descentAltReached = false;
-        turnDirectionSign = 0;
+        // RESCUE_INITIALIZE 수준의 상태 초기화 (CPA/셔틀/고도 래치 리셋)
+        gpsRescueResetState();
 
         rescueState.phase = RESCUE_FLY_HOME;
         currentVCLat = GPS_home[0];
         currentVCLon = GPS_home[1];
     } else {
         // Home point 없음 → 현재 위치 기준 헤딩 기반 무한셔틀
-        shuttleInfinite = true;
-        rescueState.intent.yawAttenuator = 1.0f;
-        initShuttlePoints();
-        rescueState.phase = RESCUE_SHUTTLE_INFINITE;
+        gpsRescueStartShuttleInfinite();
     }
 }
 

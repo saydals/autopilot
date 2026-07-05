@@ -144,6 +144,8 @@ void gpsRescueUpdate(void);
 void gpsRescueNewGpsData(void);
 void gpsRescueStart(void);
 void gpsRescueStop(void);
+void gpsRescueResetState(void);                       // RESCUE_INITIALIZE 수준 상태 리셋
+void gpsRescueStartShuttleInfinite(void);             // 무한셔틀 진입 (shuttleInfinite + initShuttlePoints + phase 설정)
 
 float         gpsRescueGetYawRate(void);
 float         gpsRescueGetThrottle(void);

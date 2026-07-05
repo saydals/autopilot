@@ -1145,6 +1145,28 @@ void initialiseRescueValues(void)
     rescueState.intent.targetVelocityCmS = (float)gpsRescueConfig()->groundSpeedCmS;
 }
 
+// RESCUE_INITIALIZE 수준의 상태 리셋 — mission.c 등 외부 모듈에서 호출
+void gpsRescueResetState(void)
+{
+    shuttleInfinite = false;
+    currentShuttleTrips = 0.0f;
+    shuttleTargetB = false;
+    attainAltStartTime = 0;
+    cpaDistToTargetCm = -1.0f;
+    cpaWasClosing = false;
+    descentAltReached = false;
+    turnDirectionSign = 0;
+}
+
+// 무한셔틀 진입 — mission.c 등 외부 모듈에서 호출
+void gpsRescueStartShuttleInfinite(void)
+{
+    shuttleInfinite = true;
+    rescueState.intent.yawAttenuator = 1.0f;
+    initShuttlePoints();
+    rescueState.phase = RESCUE_SHUTTLE_INFINITE;
+}
+
 /**
  * PID Profile 3에서 레스큐 제어 파라미터를 통합 로드
  * 아밍 시점에 1회 호출되어 모든 전역 변수를 업데이트함
