@@ -69,6 +69,7 @@ static void missionApplyWaypoint(void)
         missionStop();
         return;
     }
+    missionUpdateTargetOnly();  // 즉시 타겟 좌표/고도/속도 업데이트
 }
 
 /* ================================================================
@@ -117,6 +118,7 @@ void missionStop(void)
         rescueState.phase = RESCUE_FLY_HOME;
         currentVCLat = GPS_home[0];
         currentVCLon = GPS_home[1];
+        rescueState.intent.targetAltitudeCm = rescueState.intent.returnAltitudeCm;  // 안전 귀환 고도 보장
     } else {
         // Home point 없음 → 현재 위치 기준 헤딩 기반 무한셔틀
         gpsRescueStartShuttleInfinite();
@@ -192,7 +194,8 @@ bool missionCheckAdvance(void)
     if (dCm < GPS_RESCUE_TOUCH_ACTIVATION_CM && dCm >= 0) {
         if (prevDistCm < 0) {
             prevDistCm = dCm;
-            wasClosing = true;
+            // CPA 첫 진입: 아직 거리 추세를 모르므로 wasClosing 유예
+            // 다음 루프에서 isClosing 계산 후 wasClosing이 결정됨
             return false;
         }
 
