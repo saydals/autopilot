@@ -181,7 +181,7 @@ static serialPort_t *cliPort = NULL;
 
 // Space required to set array parameters
 #define CLI_IN_BUFFER_SIZE 256
-#define CLI_OUT_BUFFER_SIZE 64
+#define CLI_OUT_BUFFER_SIZE 256
 
 static bufWriter_t cliWriterDesc;
 static bufWriter_t *cliWriter = NULL;
