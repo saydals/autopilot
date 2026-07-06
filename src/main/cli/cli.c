@@ -6412,8 +6412,6 @@ static void printConfig(const char *cmdName, char *cmdline, bool doDiff)
     bool batchModeEnabled = false;
 #endif
     if ((dumpMask & DUMP_MASTER) || (dumpMask & DUMP_ALL)) {
-        // MSP CLI 모드 진입 직후 Configurator가 데이터 수신을 준비할 시간 확보 (첫 줄 유실 방지)
-        delay(50);
         cliPrintHashLine("version");
         printVersion(false);
 
