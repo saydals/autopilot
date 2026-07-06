@@ -410,7 +410,8 @@ static void mixerConfigureOutput(void)
 {
     mixerRuntime.motorCount = 0;
 
-    if (currentMixerMode == MIXER_CUSTOM || currentMixerMode == MIXER_CUSTOM_TRI || currentMixerMode == MIXER_CUSTOM_AIRPLANE) {
+    if (currentMixerMode == MIXER_CUSTOM || currentMixerMode == MIXER_CUSTOM_TRI || currentMixerMode == MIXER_CUSTOM_AIRPLANE
+        || (currentMixerMode == MIXER_AIRPLANE && customMotorMixer(0)->throttle != 0.0f)) {
         // load custom mixer into currentMixer
         for (int i = 0; i < MAX_SUPPORTED_MOTORS; i++) {
             // check if done
