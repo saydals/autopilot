@@ -59,6 +59,12 @@ static timeUs_t wpEntryTime = 0;
 static float prevDistCm = -1.0f;
 static bool wasClosing = false;
 
+// 글라이드 슬로프 보간 상태
+#define WP_ALT_GLIDE_MIN_DISTANCE_CM 500.0f
+static float wpGlideStartAltitudeCm = 0;
+static float wpGlideStartDistanceCm = 0;
+static bool wpGlideInitialized = false;
+
 /* ================================================================
  * 내부 헬퍼
  * ================================================================ */
@@ -69,6 +75,7 @@ static void missionApplyWaypoint(void)
         missionStop();
         return;
     }
+    wpGlideInitialized = false;  // 새 waypoint 진입 → 글라이드 슬로프 재초기화
     missionUpdateTargetOnly();  // 즉시 타겟 좌표/고도/속도 업데이트
 }
 
@@ -150,7 +157,33 @@ void missionUpdateTargetOnly(void)
     missionWaypoint_t *wp = &missionWaypoints[currentMissionWpIndex];
     currentVCLat = wp->latitude;
     currentVCLon = wp->longitude;
-    rescueState.intent.targetAltitudeCm = wp->altitude;
+
+    // --- 글라이드 슬로프: 목표 고도 점진적 보간 ---
+    // 웨이포인트가 처음 활성화되면 현재 위치/고도를 기준으로 글라이드 시작점 기록
+    // 이후 매 루프 남은 수평 거리에 비례해 목표 고도를 선형 보간함
+    const float currentDistanceCm = (float)rescueState.intent.distanceToTargetCm;
+
+    if (!wpGlideInitialized || currentDistanceCm > wpGlideStartDistanceCm) {
+        // 첫 진입 또는 바람 등으로 거리가 늘어난 경우: 현재 고도에서 다시 시작
+        wpGlideStartAltitudeCm = (float)rescueState.intent.targetAltitudeCm;
+        wpGlideStartDistanceCm = currentDistanceCm;
+        wpGlideInitialized = true;
+    }
+
+    if (currentDistanceCm >= WP_ALT_GLIDE_MIN_DISTANCE_CM && wpGlideStartDistanceCm > 0) {
+        // 거리 비례 보간: progress = 1.0 → waypoint 고도, progress = 0.0 → 시작 고도
+        const float progress = constrainf(
+            1.0f - (currentDistanceCm / wpGlideStartDistanceCm),
+            0.0f,
+            1.0f
+        );
+        rescueState.intent.targetAltitudeCm = (int32_t)(
+            wpGlideStartAltitudeCm + (float)(wp->altitude - (int32_t)wpGlideStartAltitudeCm) * progress
+        );
+    } else {
+        // 최소 거리 미만이거나 시작 거리가 0이면 즉시 목표 고도 사용 (폴백)
+        rescueState.intent.targetAltitudeCm = wp->altitude;
+    }
 
     // 목표 속도: waypoint 속도와 Rescue 최소 속도 중 큰 값
     rescueState.intent.targetVelocityCmS = MAX(
@@ -245,6 +278,7 @@ void missionInit(void)
     wpEntryTime = 0;
     prevDistCm = -1.0f;
     wasClosing = false;
+    wpGlideInitialized = false;   // 재부팅/재초기화 시 글라이드 상태도 초기화
 }
 
 void missionClear(void)
