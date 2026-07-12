@@ -1162,8 +1162,8 @@ case MSP_NAME:
 
 #ifdef USE_SERVOS
     case MSP_SERVO:
-        // Reversed send order to compensate for configurator's reverse indexing in GUI servo output display
-        for (int i = MAX_SUPPORTED_SERVOS - 1; i >= 0; i--) {
+        // Send in normal order - configurator now handles servo indexing correctly
+        for (int i = 0; i < MAX_SUPPORTED_SERVOS; i++) {
             sbufWriteU16(dst, servo[i]);
         }
         break;
