@@ -204,6 +204,7 @@ static void  handleShuttleDescentPhase(void);
 static void  handleDescentPhase(void);
 static void  handleLandingPhase(void);
 static void  handleDoNothingPhase(void);
+static void  handleMissionPhase(void);   // 🆕 미션 웨이포인트 비행 전용 핸들러
 static float getSmartHeadingError(float currentError);
 static void  updateRescueParams(void);
 
@@ -790,6 +791,59 @@ static void handleAttainAltPhase(void)
     rescueThrottle = calculateVelocityThrottle();
 }
 
+static void handleMissionPhase(void)
+{
+    // 🆕 미션 전용 네비게이션 핸들러
+    // handleFlyHomePhase()와 달리 currentVCLat/Lon을 덮어쓰지 않음.
+    // missionUpdateTargetOnly()가 설정한 웨이포인트 좌표를 read-only로 사용.
+
+    uint32_t distToTargetCm;
+    int32_t  bearingToTargetCd;
+    GPS_distance_cm_bearing(&gpsSol.llh.lat, &gpsSol.llh.lon,
+                            &currentVCLat, &currentVCLon,
+                            &distToTargetCm, &bearingToTargetCd);
+
+    // OSD 연동용 (missionUpdateTargetOnly가 이미 세팅했으나 재계산으로 일치 보장)
+    rescueState.intent.distanceToTargetCm = distToTargetCm;
+    rescueState.intent.directionToTargetCd = bearingToTargetCd;
+
+    float currentYawDeg = (float)attitude.values.yaw / 10.0f;
+    float bearingToTargetDeg = (float)bearingToTargetCd / 100.0f;
+    float rawHeadingError = currentYawDeg - bearingToTargetDeg;
+    if (rawHeadingError <= -180.0f) rawHeadingError += 360.0f;
+    else if (rawHeadingError > 180.0f) rawHeadingError -= 360.0f;
+
+    float headingError = getSmartHeadingError(rawHeadingError);
+    float absError = fabsf(headingError);
+
+    // 뱅크턴: 헤딩 오차에 비례하여 기체를 눕힘
+    float targetBankDeg = -(headingError * bankGain);
+    targetBankDeg = constrainf(targetBankDeg, -75.0f, 75.0f);
+    gpsRescueAngle[AI_ROLL] = targetBankDeg * 100.0f;
+
+    // Yaw 제어: 미세 헤딩 보정(PI) 또는 큰 헤딩 시 조화 선회 보조
+    if (absError < HEADING_HYST_LOW_DEG && turnDirectionSign == 0) {
+        float errorBoost = constrainf(1.0f + (absError / HEADING_HYST_LOW_DEG), 1.0f, 2.0f);
+        float yawP = headingError * gpsRescueConfig()->yawP * errorBoost * rescueState.intent.yawAttenuator / 10.0f;
+        yawHeadingIterm += gpsRescueConfig()->yawP * 0.05f * headingError * rescueState.sensor.gpsRescueTaskIntervalSeconds;
+        yawHeadingIterm = constrainf(yawHeadingIterm, -YAW_I_LIMIT, YAW_I_LIMIT);
+        rescueYaw = (yawP + yawHeadingIterm) * headingYawGain;
+    } else if (absError >= HEADING_HYST_HIGH_DEG || turnDirectionSign != 0) {
+        yawHeadingIterm = 0.0f;
+        rescueYaw = -(attitude.values.roll / 10.0f * bankYawGain * 3.0f);
+    } else {
+        yawHeadingIterm = 0.0f; rescueYaw = 0.0f;
+    }
+    rescueYaw = constrainf(rescueYaw, -GPS_RESCUE_MAX_YAW_RATE, GPS_RESCUE_MAX_YAW_RATE) * GET_DIRECTION(rcControlsConfig()->yaw_control_reversed);
+
+    // 고도/속도 제어는 missionUpdateTargetOnly()가 설정한 targetAltitudeCm/targetVelocityCmS 사용
+    float altErrM = (rescueState.sensor.currentAltitudeCm - rescueState.intent.targetAltitudeCm) * 0.01f;
+    float currentRollDeg = fabsf(attitude.values.roll / 10.0f);
+    bool descentAllowed = (absError < 45.0f) || (currentRollDeg < 15.0f);
+    gpsRescueAngle[AI_PITCH] = calculateAltitudePitch(altErrM, false, descentAllowed);
+    rescueThrottle = calculateVelocityThrottle();
+}
+
 static void handleFlyHomePhase(void)
 {
     // A포인트가 아직 생성되지 않았으면 홈포인트를 타겟으로 비행
@@ -915,6 +969,7 @@ static void rescueAttainPosition(void)
         case RESCUE_DO_NOTHING: handleDoNothingPhase(); break;
         case RESCUE_ATTAIN_ALT: handleAttainAltPhase(); break;
         case RESCUE_FLY_HOME:   handleFlyHomePhase();   break;
+        case RESCUE_MISSION_FLY_WP: handleMissionPhase(); break;  // 🆕 미션 전용
         case RESCUE_SHUTTLE:
         case RESCUE_SHUTTLE_INFINITE:
                                 handleShuttlePhase();   break;
@@ -1224,6 +1279,7 @@ void gpsRescueUpdate(void)
 #ifdef USE_FLIGHT_PLAN
         } else if (failsafeIsReceivingRxData() && auxVal < 1600) {
             missionStart();     // waypoint 있으면 WP #1, 없으면 Rescue로 넘어감
+            rescueState.phase = RESCUE_MISSION_FLY_WP;  // 🆕 매 루프 missionStart() 재실행 방지
 #endif
         } else {
             gpsRescueStart();
@@ -1239,24 +1295,25 @@ void gpsRescueUpdate(void)
 #ifdef USE_FLIGHT_PLAN
     // Mission mode: target coordinates are set by mission, not by rescue state machine
     if (missionIsActive()) {
-        // AUX 탈출 체크: Autopilot 범위(1400~1600) 벗어나면 미션 중단
         const uint16_t auxVal = getRescueAuxValue();
         if (failsafeIsReceivingRxData() && (auxVal < 1400 || auxVal >= 1600)) {
-            missionStop();  // 미션 중단 → 아래 switch로 fall-through
-        } else {
-            missionUpdateTargetOnly();        // 타겟 좌표/고도/속도만 설정 (WP 전환 X)
-            // ABORT/DO_NOTHING/LANDING 감지로 missionStop() 된 경우 → switch로 fall-through
-            if (!missionIsActive()) {
-                // rescueState.phase는 missionStop()에서 이미 설정됨 (FLY_HOME or SHUTTLE_INFINITE)
-            } else {
-                rescueState.phase = RESCUE_FLY_HOME;
-                performSanityChecks();            // 안전 진단 (GPS 손실 등)
-                rescueAttainPosition();           // 현재 타겟으로 제어 실행
-                missionCheckAdvance();            // CPA 체크 + WP 전환
-            }
+            missionStop();
             newGPSData = false;
-            return;                           // 기존 switch 분기 건너뜀
+            return;  // 🔴 fall-through 방지: missionStop()이 phase 설정함 → 다음 루프 처리
         }
+        // 🔴 미션 타겟 좌표/고도/속도 설정 (currentVCLat/Lon = WP 좌표, 덮어쓰기 금지)
+        missionUpdateTargetOnly();
+        if (!missionIsActive()) {
+            // missionStop()이 phase already 설정 (FLY_HOME or SHUTTLE_INFINITE) → 다음 루프 처리
+            newGPSData = false;
+            return;
+        }
+        rescueState.phase = RESCUE_MISSION_FLY_WP;  // 🆕 미션 전용 phase (handleFlyHomePhase 우회)
+        performSanityChecks();            // 안전 진단 (GPS 손실 등)
+        rescueAttainPosition();           // handleMissionPhase(): WP 좌표 그대로 사용
+        missionCheckAdvance();            // ①이 세팅한 distanceToTargetCm 기준 CPA 판정 → WP++
+        newGPSData = false;
+        return;                           // 기존 switch 분기 건너뜀
     }
 #endif
 
@@ -1270,6 +1327,13 @@ void gpsRescueUpdate(void)
         turnDirectionSign = 0;      // Phase 전환 시 래치 상태 초기화 (Bug 1 대응)
         isDescentFalling = false;   // Phase 전환 시 급하강 상태 초기화
         descentFallAligned = false; // Phase 전환 시 정렬 상태 초기화
+        // 🆕 P1: 셔틀/CPA 상태 변수 초기화 보강 (미션 변수는 missionStop()에서 처리하므로 제외)
+        shuttleInfinite = false;
+        currentShuttleTrips = 0.0f;
+        shuttleTargetB = false;
+        cpaDistToTargetCm = -1.0f;
+        cpaWasClosing = false;
+        descentAltReached = false;
 
         // 하강 단계(DESCENT) 진입 시 landingAlt보다 15미터 이상 높으면 급하강(isDescentFalling) 발동
         if (rescueState.phase == RESCUE_DESCENT && lastPhase != RESCUE_DESCENT) {
@@ -1278,8 +1342,8 @@ void gpsRescueUpdate(void)
             }
         }
 
-        // FLY_HOME 진입 시 Flyaway 오검출 방지를 위해 카운터와 거리 지표 초기화 
-        if (rescueState.phase == RESCUE_FLY_HOME) {
+        // FLY_HOME 진입 시 Flyaway 오검출 방지를 위해 카운터와 거리 지표 초기화
+        if (rescueState.phase == RESCUE_FLY_HOME || rescueState.phase == RESCUE_MISSION_FLY_WP) {
             rescueState.intent.secondsFailing = 0;
             prevDistanceToHomeCm = rescueState.sensor.distanceToHomeCm;
         }
@@ -1324,6 +1388,7 @@ void gpsRescueUpdate(void)
 #ifdef USE_FLIGHT_PLAN
                 else if (failsafeIsReceivingRxData() && getRescueAuxValue() < 1600) {
                     missionStart();  // Waypoint 있으면 Autopilot, 없으면 Rescue
+                    if (missionIsActive()) rescueState.phase = RESCUE_MISSION_FLY_WP;  // 🆕
                 }
 #endif
                 else {
@@ -1348,7 +1413,9 @@ void gpsRescueUpdate(void)
                 }
 #ifdef USE_FLIGHT_PLAN
                 if (aux < 1600) {
-                    missionStart(); break;
+                    missionStart();  // Autopilot 재진입
+                    if (missionIsActive()) rescueState.phase = RESCUE_MISSION_FLY_WP;  // 🆕
+                    break;
                 }
 #endif
             }
@@ -1369,7 +1436,9 @@ case RESCUE_FLY_HOME:
         }
 #ifdef USE_FLIGHT_PLAN
         if (aux < 1600) {
-            missionStart(); break;
+            missionStart();  // Autopilot 재진입
+            if (missionIsActive()) rescueState.phase = RESCUE_MISSION_FLY_WP;  // 🆕
+            break;
         }
 #endif
     }
@@ -1468,6 +1537,7 @@ case RESCUE_FLY_HOME:
 #ifdef USE_FLIGHT_PLAN
                 else if (aux < 1600) {
                     missionStart();  // Autopilot 재진입
+                    if (missionIsActive()) rescueState.phase = RESCUE_MISSION_FLY_WP;  // 🆕
                 }
 #endif
                 else {

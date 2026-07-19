@@ -60,6 +60,7 @@ typedef enum {
     RESCUE_FLY_HOME,            // Fly-home
     RESCUE_SHUTTLE,             // 셔틀
     RESCUE_SHUTTLE_INFINITE,    // 단독 셔틀 모드
+    RESCUE_MISSION_FLY_WP,      // 🆕 미션 웨이포인트 비행 (별도 핸들러, handleFlyHomePhase 하드코딩 회피)
     RESCUE_SHUTTLE_DESCENT,     // 셔틀하강
     RESCUE_DESCENT,             // 하강 (홈포인트 타겟)
     RESCUE_LANDING,             // 최종 랜딩 (최종 20m)

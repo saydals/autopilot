@@ -146,7 +146,9 @@ void missionUpdateTargetOnly(void)
     rescuePhase_e phase = gpsRescueGetPhase();
     if (phase == RESCUE_ABORT ||
         phase == RESCUE_DO_NOTHING ||
-        phase == RESCUE_LANDING) {
+        phase == RESCUE_LANDING ||
+        phase == RESCUE_DESCENT ||
+        phase == RESCUE_SHUTTLE_DESCENT) {
         missionStop();
         return;
     }
