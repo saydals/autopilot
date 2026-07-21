@@ -1399,7 +1399,12 @@ void gpsRescueUpdate(void)
 #ifdef USE_FLIGHT_PLAN
                 else if (failsafeIsReceivingRxData() && getRescueAuxValue() < 1600) {
                     missionStart();  // Waypoint 있으면 Autopilot, 없으면 Rescue
-                    if (missionIsActive()) rescueState.phase = RESCUE_MISSION_FLY_WP;  // 🆕
+                    if (missionIsActive()) {
+                        rescueState.phase = RESCUE_MISSION_FLY_WP;  // 🆕
+                    } else {
+                        // 웨이포인트 없음 → 일반 레스큐로 진입
+                        rescueState.phase = RESCUE_INITIALIZE;
+                    }
                 }
 #endif
                 else {

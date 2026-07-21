@@ -236,6 +236,19 @@ bool missionCheckAdvance(void)
         if (prevDistCm < 0) {
             prevDistCm = dCm;
             wasClosing = false;  // 새 WP 진입 시 wasClosing 명시적 리셋 (이전 WP 잔류값 방지)
+            if (dCm < GPS_RESCUE_TOUCH_PROXIMITY_CM) {
+                // 첫 진입부터 이미 근접 범위 내 → 즉시 WP 전환
+                currentMissionWpIndex++;
+                if (currentMissionWpIndex >= missionWpCount) {
+                    missionStopAndGoHome();
+                } else {
+                    wpEntryTime = micros();
+                    prevDistCm = -1.0f;
+                    wasClosing = false;
+                    missionApplyWaypoint();
+                }
+                return true;
+            }
             return false;
         }
 
