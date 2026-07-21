@@ -72,7 +72,7 @@ static bool wpGlideInitialized = false;
 static void missionApplyWaypoint(void)
 {
     if (currentMissionWpIndex >= missionWpCount) {
-        missionStop();
+        missionStopAndGoHome();
         return;
     }
     wpGlideInitialized = false;  // 새 waypoint 진입 → 글라이드 슬로프 재초기화
@@ -112,18 +112,20 @@ void missionStart(void)
 
 void missionStop(void)
 {
-    // [주의] 이 함수는 mission.c 내부(안전 트리거)와 gps_rescue.c(AUX 변경) 모두에서 호출됨
-    // 호출 컨텍스트에 따라 phase 전환 동작이 달라질 수 있음
+    // 미션 상태만 초기화. phase는 변경하지 않음 (호출부에서 별도로 처리)
     isMissionActive = false;
     wpEntryTime = 0;
     prevDistCm = -1.0f;
     wasClosing = false;
     wpGlideInitialized = false;
+}
 
-    // Home Fix 유무에 따라 분기
+void missionStopAndGoHome(void)
+{
+    // 미션 중지 + 홈 귀환 (정상 완료 시 사용)
+    missionStop();
+
     if (STATE(GPS_FIX_HOME)) {
-        // Home point 있음 → Home 귀환
-        // RESCUE_INITIALIZE 수준의 상태 초기화 (CPA/셔틀/고도 래치 리셋)
         gpsRescueResetState();
 
         rescueState.phase = RESCUE_FLY_HOME;
@@ -131,7 +133,6 @@ void missionStop(void)
         currentVCLon = GPS_home[1];
         rescueState.intent.targetAltitudeCm = rescueState.intent.returnAltitudeCm;  // 안전 귀환 고도 보장
     } else {
-        // Home point 없음 → 현재 위치 기준 헤딩 기반 무한셔틀
         gpsRescueStartShuttleInfinite();
     }
 }
@@ -218,7 +219,7 @@ bool missionCheckAdvance(void)
     if (cmpTimeUs(micros(), wpEntryTime) > MISSION_WP_TIMEOUT_US) {
         currentMissionWpIndex++;
         if (currentMissionWpIndex >= missionWpCount) {
-            missionStop();
+            missionStopAndGoHome();
         } else {
             wpEntryTime = micros();
             prevDistCm = -1.0f;
@@ -250,7 +251,7 @@ bool missionCheckAdvance(void)
             // WP 전환
             currentMissionWpIndex++;
             if (currentMissionWpIndex >= missionWpCount) {
-                missionStop();
+                missionStopAndGoHome();
             } else {
                 wpEntryTime = micros();
                 prevDistCm = -1.0f;

@@ -1219,6 +1219,7 @@ void gpsRescueResetState(void)
 // 무한셔틀 진입 — mission.c 등 외부 모듈에서 호출
 void gpsRescueStartShuttleInfinite(void)
 {
+    gpsRescueResetState();
     shuttleInfinite = true;
     rescueState.intent.yawAttenuator = 1.0f;
     initShuttlePoints();
@@ -1300,13 +1301,18 @@ void gpsRescueUpdate(void)
         const uint16_t auxVal = getRescueAuxValue();
         if (failsafeIsReceivingRxData() && (auxVal < 1400 || auxVal >= 1600)) {
             missionStop();
+            if (auxVal < 1400) {
+                gpsRescueStartShuttleInfinite();
+            } else {
+                rescueState.phase = RESCUE_INITIALIZE;
+            }
             newGPSData = false;
-            return;  // 🔴 fall-through 방지: missionStop()이 phase 설정함 → 다음 루프 처리
+            return;  // AUX 변경에 따른 phase 설정 완료 → 다음 루프 처리
         }
         // 🔴 미션 타겟 좌표/고도/속도 설정 (currentVCLat/Lon = WP 좌표, 덮어쓰기 금지)
         missionUpdateTargetOnly();
         if (!missionIsActive()) {
-            // missionStop()이 phase already 설정 (FLY_HOME or SHUTTLE_INFINITE) → 다음 루프 처리
+            // 안전 트리거로 미션이 중지된 경우 → 해당 phase 유지
             newGPSData = false;
             return;
         }
