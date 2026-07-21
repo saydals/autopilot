@@ -85,16 +85,16 @@ static void missionApplyWaypoint(void)
 
 void missionStart(void)
 {
-    // Rescue 재진입 허용: 하강/착륙/비상/FLY_HOME/ATTAIN_ALT가 아니면 Autopilot 재시작 가능
+    // Rescue 재진입 허용: 하강/착륙/비상이 아니면 Autopilot 재시작 가능
+    // (FLY_HOME/ATTAIN_ALT는 gps_rescue.c에서 "Autopilot 재진입" 목적으로 명시적으로
+    //  missionStart()를 호출하는 phase이므로 여기서 차단하면 그 호출부가 죽은 코드가 됨)
     const rescuePhase_e phase = gpsRescueGetPhase();
     if (phase == RESCUE_DESCENT ||
         phase == RESCUE_LANDING ||
         phase == RESCUE_SHUTTLE_DESCENT ||
         phase == RESCUE_ABORT ||
         phase == RESCUE_DO_NOTHING ||
-        phase == RESCUE_COMPLETE ||
-        phase == RESCUE_FLY_HOME ||
-        phase == RESCUE_ATTAIN_ALT) {
+        phase == RESCUE_COMPLETE) {
         return;
     }
     if (missionWpCount == 0) {

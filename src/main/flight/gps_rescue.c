@@ -1283,7 +1283,11 @@ void gpsRescueUpdate(void)
 #ifdef USE_FLIGHT_PLAN
         } else if (failsafeIsReceivingRxData() && auxVal < 1600) {
             missionStart();     // waypoint 있으면 WP #1, 없으면 Rescue로 넘어감
-            if (missionIsActive()) rescueState.phase = RESCUE_MISSION_FLY_WP;  // 🆕 매 루프 missionStart() 재실행 방지
+            if (missionIsActive()) {
+                rescueState.phase = RESCUE_MISSION_FLY_WP;  // 🆕 매 루프 missionStart() 재실행 방지
+            } else {
+                gpsRescueStart();  // 웨이포인트 없음 → 일반 Rescue로 폴백 (RESCUE_IDLE 고착 방지)
+            }
 #endif
         } else {
             gpsRescueStart();
