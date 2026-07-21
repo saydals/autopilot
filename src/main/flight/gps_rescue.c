@@ -144,6 +144,7 @@ static bool        descentFallAligned = false;
 
 static float       rescueThrottle;
 static float       rescueYaw;
+static timeUs_t    landingStartTime = 0;
 static timeUs_t    attainAltStartTime = 0;
 static bool        smoothedPitchNeedsReset = false; // 페이즈 전환 시 피치 LPF 강제 초기화 플래그
 
@@ -646,6 +647,7 @@ static void handleDescentPhase(void)
             isDescentFalling = false;
             descentFallAligned = false;
             smoothedPitchNeedsReset = true; // 급하강 종료 후 PID 제어 시 부드러운 전환을 위해 LPF 초기화
+            rescueState.intent.targetAltitudeCm = descentAlt * 100.0f; // 목표 고도를 descentAlt로 재설정
 
         } else {
             // 헤딩 에러 계산 (Fly home 방식)
@@ -914,10 +916,10 @@ static void handleLandingPhase(void)
     rescueYaw = 0.0f;
 
     // 랜딩 진입 후 3초간 throttleMin 유지 → 이후 PWM 1000으로 모터 정지
-    // attainAltStartTime 재활용: ATTAIN_ALT→FLY_HOME 전환 시 이미 0으로 초기화됨
+    // landingStartTime 전용 변수 사용 (attainAltStartTime과 분리)
     // PWM_RANGE_MIN(1000)은 디스암이 아니므로 필요 시 사용자가 쓰로틀 올릴 수 있음
-    if (attainAltStartTime == 0) attainAltStartTime = micros();
-    if (cmpTimeUs(micros(), attainAltStartTime) >= ATTAIN_ALT_TIMEOUT_US) {
+    if (landingStartTime == 0) landingStartTime = micros();
+    if (cmpTimeUs(micros(), landingStartTime) >= ATTAIN_ALT_TIMEOUT_US) {
         rescueThrottle = PWM_RANGE_MIN;  // 1000 PWM — 모터 정지 (디스암 아님)
     } else {
         rescueThrottle = (float)gpsRescueConfig()->throttleMin;
@@ -964,6 +966,7 @@ static void rescueAttainPosition(void)
             rescueState.intent.disarmThreshold = gpsRescueConfig()->disarmThreshold * 0.1f;
             rescueState.sensor.imuYawCogGain = 1.0f;
             gpsRescueAngle[AI_PITCH] = attitude.values.pitch / 10.0f * 100.0f;
+            landingStartTime = 0;  // RESCUE_INITIALIZE 진입 시 랜딩 타이머 리셋
             lastRescueYaw = 0.0f;
             return;
         case RESCUE_DO_NOTHING: handleDoNothingPhase(); break;
@@ -1011,8 +1014,8 @@ static void performSanityChecks(void)
     if (dTime < 1000000) return;
     previousTimeUs = currentTimeUs;
 
-    // 귀환 중 홈과의 거리가 좁혀지지 않으면 실패로 간주
-    if (rescueState.phase == RESCUE_FLY_HOME) {
+    // 귀환 중 홈과의 거리가 좁혀지지 않으면 실패로 간주 (FLY_HOME + MISSION_FLY_WP 모두 검사)
+    if (rescueState.phase == RESCUE_FLY_HOME || rescueState.phase == RESCUE_MISSION_FLY_WP) {
         const float velocityToHomeCmS = rescueState.sensor.velocityToHomeCmS;
         rescueState.intent.secondsFailing += (velocityToHomeCmS < 0.1f * rescueState.intent.targetVelocityCmS) ? 1 : -1;
         rescueState.intent.secondsFailing = constrain(rescueState.intent.secondsFailing, 0, 30);
@@ -1289,7 +1292,6 @@ void gpsRescueUpdate(void)
     }
 
     sensorUpdate();
-    bool initialVelocityLow = (rescueState.sensor.groundSpeedCmS < (float)gpsRescueConfig()->groundSpeedCmS);
     rescueState.isAvailable = checkGPSRescueIsAvailable();
 
 #ifdef USE_FLIGHT_PLAN
@@ -1328,7 +1330,10 @@ void gpsRescueUpdate(void)
         isDescentFalling = false;   // Phase 전환 시 급하강 상태 초기화
         descentFallAligned = false; // Phase 전환 시 정렬 상태 초기화
         // 🆕 P1: 셔틀/CPA 상태 변수 초기화 보강 (미션 변수는 missionStop()에서 처리하므로 제외)
-        shuttleInfinite = false;
+        // shuttleInfinite는 셔틀↔비셔틀 전환 시에만 리셋 (셔틀 간 상호 전환 시 유지)
+        if (!isShuttlePhase(rescueState.phase) || !isShuttlePhase(lastPhase)) {
+            shuttleInfinite = false;
+        }
         currentShuttleTrips = 0.0f;
         shuttleTargetB = false;
         cpaDistToTargetCm = -1.0f;
@@ -1444,7 +1449,7 @@ case RESCUE_FLY_HOME:
     }
     float targetVelErr = gpsRescueConfig()->groundSpeedCmS - rescueState.intent.targetVelocityCmS;
     bool targetVelocityIsLow = rescueState.intent.targetVelocityCmS < gpsRescueConfig()->groundSpeedCmS;
-    if (initialVelocityLow == targetVelocityIsLow) {
+    if (targetVelocityIsLow) {
         rescueState.intent.targetVelocityCmS += rescueState.sensor.gpsRescueTaskIntervalSeconds * targetVelErr;
     }
     if (newGPSData) {
@@ -1547,12 +1552,15 @@ case RESCUE_FLY_HOME:
             break;
 
         case RESCUE_SHUTTLE_INFINITE:
-            if (failsafeIsReceivingRxData() && getRescueAuxValue() >= 1400) rescueState.phase = RESCUE_INITIALIZE;
+            if (failsafeIsReceivingRxData() && getRescueAuxValue() >= 1400) {
+                gpsRescueResetState();
+                rescueState.phase = RESCUE_INITIALIZE;
+            }
             break;
 
         case RESCUE_SHUTTLE_DESCENT:
             if (failsafeIsReceivingRxData() && getRescueAuxValue() < 1400) {
-                shuttleInfinite = true; rescueState.phase = RESCUE_SHUTTLE_INFINITE; break;
+                shuttleInfinite = true; initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE; break;
             }
 
             // 셔틀 하강 전 구간 하강고도 도달 감지
@@ -1566,7 +1574,7 @@ case RESCUE_FLY_HOME:
 
         case RESCUE_DESCENT:
             if (failsafeIsReceivingRxData() && getRescueAuxValue() < 1400) {
-                shuttleInfinite = true; rescueState.phase = RESCUE_SHUTTLE_INFINITE; break;
+                shuttleInfinite = true; initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE; break;
             }
             // 랜딩 전환 조건: 홈30m이내 + 착륙고도(landingAlt) 모두 만족시 랜딩 시작
             if (rescueState.sensor.distanceToHomeM <= 30.0f && rescueState.sensor.currentAltitudeCm <= (landingAlt * 100.0f)) {

@@ -85,20 +85,21 @@ static void missionApplyWaypoint(void)
 
 void missionStart(void)
 {
-    // Rescue 재진입 허용: 하강/착륙/비상 단계가 아니면 Autopilot 재시작 가능
+    // Rescue 재진입 허용: 하강/착륙/비상/FLY_HOME/ATTAIN_ALT가 아니면 Autopilot 재시작 가능
     const rescuePhase_e phase = gpsRescueGetPhase();
     if (phase == RESCUE_DESCENT ||
         phase == RESCUE_LANDING ||
         phase == RESCUE_SHUTTLE_DESCENT ||
         phase == RESCUE_ABORT ||
         phase == RESCUE_DO_NOTHING ||
-        phase == RESCUE_COMPLETE) {
+        phase == RESCUE_COMPLETE ||
+        phase == RESCUE_FLY_HOME ||
+        phase == RESCUE_ATTAIN_ALT) {
         return;
     }
     if (missionWpCount == 0) {
-        // Waypoint 없음 → Rescue 실행
+        // Waypoint 없음 → phase 변경 없이 리턴 (gps_rescue.c에서 일반 Rescue 처리)
         isMissionActive = false;
-        rescueState.phase = RESCUE_INITIALIZE;
         return;
     }
     currentMissionWpIndex = 0;
@@ -111,10 +112,13 @@ void missionStart(void)
 
 void missionStop(void)
 {
+    // [주의] 이 함수는 mission.c 내부(안전 트리거)와 gps_rescue.c(AUX 변경) 모두에서 호출됨
+    // 호출 컨텍스트에 따라 phase 전환 동작이 달라질 수 있음
     isMissionActive = false;
     wpEntryTime = 0;
     prevDistCm = -1.0f;
     wasClosing = false;
+    wpGlideInitialized = false;
 
     // Home Fix 유무에 따라 분기
     if (STATE(GPS_FIX_HOME)) {
@@ -149,7 +153,8 @@ void missionUpdateTargetOnly(void)
         phase == RESCUE_LANDING ||
         phase == RESCUE_DESCENT ||
         phase == RESCUE_SHUTTLE_DESCENT) {
-        missionStop();
+        // mission만 중지하고 phase는 유지 (안전 개입 무효화 방지)
+        isMissionActive = false;
         return;
     }
     if (!missionIsActive()) {
@@ -229,8 +234,7 @@ bool missionCheckAdvance(void)
     if (dCm < GPS_RESCUE_TOUCH_ACTIVATION_CM && dCm >= 0) {
         if (prevDistCm < 0) {
             prevDistCm = dCm;
-            // CPA 첫 진입: 아직 거리 추세를 모르므로 wasClosing 유예
-            // 다음 루프에서 isClosing 계산 후 wasClosing이 결정됨
+            wasClosing = false;  // 새 WP 진입 시 wasClosing 명시적 리셋 (이전 WP 잔류값 방지)
             return false;
         }
 
@@ -287,6 +291,8 @@ void missionClear(void)
 {
     memset(missionWaypoints, 0, sizeof(missionWaypoints));
     missionWpCount = 0;
+    currentMissionWpIndex = 0;
+    isMissionActive = false;
 
     // PG에도 반영
     missionConfigMutable()->waypointCount = 0;
@@ -327,6 +333,11 @@ bool missionRemove(int idx)
         memcpy(&missionWaypoints[i], &missionWaypoints[i + 1], sizeof(missionWaypoint_t));
     }
     missionWpCount--;
+
+    // currentMissionWpIndex 보정 (삭제된 WP보다 뒤에 있었으면 인덱스 감소)
+    if (currentMissionWpIndex > idx && currentMissionWpIndex > 0) {
+        currentMissionWpIndex--;
+    }
 
     // PG에도 반영
     missionConfigMutable()->waypointCount = missionWpCount;
