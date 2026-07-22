@@ -1082,9 +1082,9 @@ static float getSmartHeadingError(float currentError)
     // 3. 래치 활성화 중 에러 보정 (핵심 로직)
     if (turnDirectionSign != 0) {
         // 부호가 반대로 튀었을 경우 360도 보정하여 방향 유지
-        if (turnDirectionSign == 1 && currentError < 0) {
+        if (turnDirectionSign == 1 && currentError < -HEADING_LATCH_OFF_DEG) {
             return currentError + 360.0f; // 실제 -175도 -> 보정 +185도
-        } else if (turnDirectionSign == -1 && currentError > 0) {
+        } else if (turnDirectionSign == -1 && currentError > HEADING_LATCH_OFF_DEG) {
             return currentError - 360.0f; // 실제 +175도 -> 보정 -185도
         }
     }
