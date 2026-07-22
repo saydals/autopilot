@@ -47,6 +47,7 @@
 
 #include "flight/failsafe.h"
 #include "flight/gps_rescue.h"
+#include "flight/mission.h"
 #include "flight/imu.h"
 #include "flight/mixer.h"
 #include "flight/pid.h"
@@ -245,6 +246,18 @@ void renderOsdWarning(char *warningText, bool *blinking, uint8_t *displayAttr)
             return;
         }
     }
+
+#ifdef USE_FLIGHT_PLAN
+    // 첫 WP가 홈에서 500m 이상 떨어져 미션 취소됨
+    if (osdWarnGetState(OSD_WARNING_GPS_RESCUE_WP1_TOO_FAR) &&
+       ARMING_FLAG(ARMED) &&
+       missionIsWp1TooFar()) {
+        tfp_sprintf(warningText, "WP1>500m MISSION ABORT");
+        *displayAttr = DISPLAYPORT_SEVERITY_WARNING;
+        *blinking = true;
+        return;
+    }
+#endif
 
 #endif // USE_GPS_RESCUE
 

@@ -51,6 +51,7 @@ uint8_t missionWpCount = 0;
 uint8_t currentMissionWpIndex = 0;
 
 static bool isMissionActive = false;
+static bool wp1TooFar = false;  // 첫 WP가 홈에서 500m 이상 떨어져 있음 (OSD 경고용)
 
 // 미션 타임아웃 5분
 #define MISSION_WP_TIMEOUT_US 300000000
@@ -64,6 +65,13 @@ static bool wasClosing = false;
 static float wpGlideStartAltitudeCm = 0;
 static float wpGlideStartDistanceCm = 0;
 static bool wpGlideInitialized = false;
+
+/* ================================================================
+ * 전방 선언
+ * ================================================================ */
+
+static void missionApplyWaypoint(void);
+void missionStopAndGoHome(void);
 
 /* ================================================================
  * 내부 헬퍼
@@ -100,8 +108,19 @@ void missionStart(void)
     if (missionWpCount == 0) {
         // Waypoint 없음 → phase 변경 없이 리턴 (gps_rescue.c에서 일반 Rescue 처리)
         isMissionActive = false;
+        wp1TooFar = false;
         return;
     }
+
+    // 🆕 첫 번째 Waypoint 홈 거리 검증 (안전장치)
+    if (!missionValidateFirstWaypoint()) {
+        // 첫 WP가 홈에서 500m 이상 떨어져 있음 → 미션 취소, 일반 Rescue로 Fallback
+        isMissionActive = false;
+        wp1TooFar = true;
+        return;
+    }
+    wp1TooFar = false;
+
     currentMissionWpIndex = 0;
     isMissionActive = true;
     wpEntryTime = micros();
@@ -114,6 +133,7 @@ void missionStop(void)
 {
     // 미션 상태만 초기화. phase는 변경하지 않음 (호출부에서 별도로 처리)
     isMissionActive = false;
+    wp1TooFar = false;
     wpEntryTime = 0;
     prevDistCm = -1.0f;
     wasClosing = false;
@@ -295,6 +315,7 @@ void missionInit(void)
     }
     currentMissionWpIndex = 0;
     isMissionActive = false;
+    wp1TooFar = false;
     wpEntryTime = 0;
     prevDistCm = -1.0f;
     wasClosing = false;
@@ -307,6 +328,7 @@ void missionClear(void)
     missionWpCount = 0;
     currentMissionWpIndex = 0;
     isMissionActive = false;
+    wp1TooFar = false;
 
     // PG에도 반영
     missionConfigMutable()->waypointCount = 0;
@@ -414,6 +436,44 @@ missionWpPattern_e strToWpPattern(const char *str)
 {
     if (strcasecmp(str, "FIGURE8") == 0) return WP_PATTERN_FIGURE8;
     return WP_PATTERN_ORBIT;  // default
+}
+
+/* ================================================================
+ * 첫 번째 Waypoint 홈 거리 검증 (안전장치)
+ * ================================================================ */
+
+bool missionValidateFirstWaypoint(void)
+{
+    // Home 위치가 없으면 검증 불가 → 안전하게 미션 실행 안 함
+    if (!STATE(GPS_FIX_HOME)) {
+        return false;
+    }
+
+    if (missionWpCount == 0) {
+        return false;
+    }
+
+    // 첫 번째 Waypoint 좌표
+    missionWaypoint_t *wp = &missionWaypoints[0];
+
+    // 홈 위치와 첫 WP 간 거리 계산
+    uint32_t distCm;
+    int32_t bearingCd;
+    GPS_distance_cm_bearing(&GPS_home[0], &GPS_home[1],
+                            &wp->latitude, &wp->longitude,
+                            &distCm, &bearingCd);
+
+    // 500m 이상이면 검증 실패
+    if (distCm >= MISSION_FIRST_WP_MAX_DISTANCE_CM) {
+        return false;
+    }
+
+    return true;
+}
+
+bool missionIsWp1TooFar(void)
+{
+    return wp1TooFar;
 }
 
 #endif // USE_FLIGHT_PLAN

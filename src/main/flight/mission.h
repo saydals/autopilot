@@ -23,6 +23,7 @@
 #ifdef USE_FLIGHT_PLAN
 
 #define MAX_MISSION_WAYPOINTS 15
+#define MISSION_FIRST_WP_MAX_DISTANCE_CM 50000  // 500m — 첫 WP 홈 거리 제한
 
 typedef enum {
     WP_TYPE_FLYOVER    = 0,
@@ -56,6 +57,7 @@ extern uint8_t currentMissionWpIndex;
 
 void missionInit(void);
 void missionStart(void);
+bool missionValidateFirstWaypoint(void);  // 첫 WP가 홈에서 500m 이내인지 검증
 void missionStop(void);
 bool missionIsActive(void);
 
@@ -70,5 +72,7 @@ const char *wpTypeToStr(missionWpType_e type);
 missionWpType_e strToWpType(const char *str);
 const char *wpPatternToStr(missionWpPattern_e pattern);
 missionWpPattern_e strToWpPattern(const char *str);
+
+bool missionIsWp1TooFar(void);           // OSD 경고용 getter
 
 #endif // USE_FLIGHT_PLAN
