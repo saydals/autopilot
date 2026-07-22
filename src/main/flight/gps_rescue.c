@@ -1104,7 +1104,7 @@ static void sensorUpdate(void)
     rescueState.sensor.currentAltitudeCm = getAltitude();
     rescueState.sensor.healthy = gpsIsHealthy();
 
-    if (rescueState.phase == RESCUE_LANDING) {
+    if (rescueState.phase == RESCUE_LANDING || rescueState.phase == RESCUE_DO_NOTHING) {
         rescueState.sensor.accMagnitude = (float) sqrtf(sq(acc.accADC[Z] - acc.dev.acc_1G) + sq(acc.accADC[X]) + sq(acc.accADC[Y])) * acc.dev.acc_1G_rec;
     }
 
