@@ -550,9 +550,9 @@ static void handleShuttleProgress(void)
     // 근접 폴백 포함 터치 판정
     // 근접 터치 판정
     if (touchedByCPA || dCm < GPS_RESCUE_TOUCH_PROXIMITY_CM) {
-        // [중요] 다음 타겟 비행을 위해 CPA 상태 완전 리셋 (오작동 방지용 큰 값 설정)
-        cpaDistToTargetCm = 200000.0f; 
-        cpaWasClosing     = true;
+        // [중요] 다음 타겟 비행을 위해 CPA 상태 완전 리셋 (-1로 초기화)
+        cpaDistToTargetCm = -1.0f; 
+        cpaWasClosing     = false;
         yawHeadingIterm   = 0.0f;  // 타겟 전환 시 급격한 방향 전환으로 인한 I-term 킥(Kick) 방지
         turnDirectionSign = 0;
 
