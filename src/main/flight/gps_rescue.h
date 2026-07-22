@@ -124,6 +124,7 @@ typedef struct {
     float altitudeDataIntervalSeconds;
     float gpsRescueTaskIntervalSeconds;
     float velocityToHomeCmS;
+    float velocityToTargetCmS;   // 현재 타겟(currentVCLat/currentVCLon) 방향 속도 (cm/s)
     float absErrorAngle;
     float imuYawCogGain;
 } rescueSensorData_s;

@@ -164,6 +164,7 @@ static float altitudePitchIterm     = 0.0f;
 static float yawHeadingIterm        = 0.0f; // Renamed from yawDescentIterm to match functionality
 static float lastRescueYaw          = 0.0f;
 static float prevDistanceToHomeCm   = 0.0f; // Moved to file scope for phase-transition reset
+static float prevDistanceToTargetCm = 0.0f; // 이전 프레임 타겟(currentVCLat/currentVCLon) 거리 (cm)
 static float prevAltM               = 0.0f;
 static bool  prevAltMInitialized    = false;
 
@@ -959,6 +960,7 @@ static void rescueAttainPosition(void)
             cpaWasClosing     = false;
             descentAltReached = false;  // [Fix] 레스큐 초기화 시 고도 래치 리셋
             turnDirectionSign = 0;
+            prevDistanceToTargetCm = 0.0f;  // velocityToTargetCmS 초기화용
             // 새 A포인트를 생성하지 않고 낡은 좌표로 비행하는 버그가 발생함.
             if ((int)descentAlt % 2 != 0) {
                 aPointValid = false; 
@@ -1014,8 +1016,8 @@ static void performSanityChecks(void)
     if (dTime < 1000000) return;
     previousTimeUs = currentTimeUs;
 
-    // 귀환 중 홈과의 거리가 좁혀지지 않으면 실패로 간주 (FLY_HOME + MISSION_FLY_WP 모두 검사)
-    if (rescueState.phase == RESCUE_FLY_HOME || rescueState.phase == RESCUE_MISSION_FLY_WP) {
+    // 귀환 중 홈과의 거리가 좁혀지지 않으면 실패로 간주 (FLY_HOME 전용)
+    if (rescueState.phase == RESCUE_FLY_HOME) {
         const float velocityToHomeCmS = rescueState.sensor.velocityToHomeCmS;
         rescueState.intent.secondsFailing += (velocityToHomeCmS < 0.1f * rescueState.intent.targetVelocityCmS) ? 1 : -1;
         rescueState.intent.secondsFailing = constrain(rescueState.intent.secondsFailing, 0, 30);
@@ -1026,6 +1028,31 @@ static void performSanityChecks(void)
             } else
 #endif
             { rescueState.failure = RESCUE_FLYAWAY; }
+        }
+    }
+
+    // 웨이포인트 비행 중 타겟 방향 속도가 부족하면 홈방향 귀환(FlyHome)으로 fallback
+    if (rescueState.phase == RESCUE_MISSION_FLY_WP) {
+        const float velocityToTargetCmS = rescueState.sensor.velocityToTargetCmS;
+        rescueState.intent.secondsFailing += (velocityToTargetCmS < 0.1f * rescueState.intent.targetVelocityCmS) ? 1 : -1;
+        rescueState.intent.secondsFailing = constrain(rescueState.intent.secondsFailing, 0, 30);
+        if (rescueState.intent.secondsFailing >= 30) {
+#ifdef USE_MAG
+            if (sensors(SENSOR_MAG) && gpsRescueConfig()->useMag && !magForceDisable) {
+                magForceDisable = true; rescueState.intent.secondsFailing = 0;
+            } else
+#endif
+            {
+                // 타겟 방향 속도 부족 → 미션 중단, 홈방향 귀환으로 fallback
+#ifdef USE_FLIGHT_PLAN
+                missionStop();
+#endif
+                rescueState.intent.targetAltitudeCm = rescueState.intent.returnAltitudeCm;
+                rescueState.intent.yawAttenuator = 1.0f;
+                rescueState.phase = RESCUE_FLY_HOME;
+                rescueState.intent.secondsFailing = 0;
+                prevDistanceToHomeCm = rescueState.sensor.distanceToHomeCm;
+            }
         }
     }
 
@@ -1099,6 +1126,17 @@ static void sensorUpdate(void)
     rescueState.sensor.gpsDataIntervalSeconds = getGpsDataIntervalSeconds();
     rescueState.sensor.velocityToHomeCmS = ((prevDistanceToHomeCm - rescueState.sensor.distanceToHomeCm) / rescueState.sensor.gpsDataIntervalSeconds);
     prevDistanceToHomeCm = rescueState.sensor.distanceToHomeCm;
+
+    // 현재 타겟(currentVCLat/currentVCLon) 방향 속도 계산
+    {
+        uint32_t distToTargetCm;
+        int32_t  bearingToTargetCd;
+        GPS_distance_cm_bearing(&gpsSol.llh.lat, &gpsSol.llh.lon,
+                                &currentVCLat, &currentVCLon,
+                                &distToTargetCm, &bearingToTargetCd);
+        rescueState.sensor.velocityToTargetCmS = ((prevDistanceToTargetCm - (float)distToTargetCm) / rescueState.sensor.gpsDataIntervalSeconds);
+        prevDistanceToTargetCm = (float)distToTargetCm;
+    }
 
     if (gpsRescueConfig()->groundSpeedCmS) {
         const float rescueGroundspeed = (float)gpsRescueConfig()->groundSpeedCmS;
@@ -1321,6 +1359,15 @@ void gpsRescueUpdate(void)
             return;
         }
         rescueState.phase = RESCUE_MISSION_FLY_WP;  // 🆕 미션 전용 phase (handleFlyHomePhase 우회)
+        // velocityToTargetCmS 초기화: 현재 타겟 거리로 prevDistanceToTargetCm 설정
+        {
+            uint32_t distToTargetCm;
+            int32_t  bearingToTargetCd;
+            GPS_distance_cm_bearing(&gpsSol.llh.lat, &gpsSol.llh.lon,
+                                    &currentVCLat, &currentVCLon,
+                                    &distToTargetCm, &bearingToTargetCd);
+            prevDistanceToTargetCm = (float)distToTargetCm;
+        }
         performSanityChecks();            // 안전 진단 (GPS 손실 등)
         rescueAttainPosition();           // handleMissionPhase(): WP 좌표 그대로 사용
         missionCheckAdvance();            // ①이 세팅한 distanceToTargetCm 기준 CPA 판정 → WP++
