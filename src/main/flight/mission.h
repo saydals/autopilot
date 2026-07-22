@@ -59,6 +59,7 @@ void missionInit(void);
 void missionStart(void);
 bool missionValidateFirstWaypoint(void);  // 첫 WP가 홈에서 500m 이내인지 검증
 void missionStop(void);
+void missionStopAndGoHome(void);
 bool missionIsActive(void);
 
 void missionUpdateTargetOnly(void);
