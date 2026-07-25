@@ -415,7 +415,7 @@ static const char * const wpTypeNames[] = {
 
 const char *wpTypeToStr(missionWpType_e type)
 {
-    if (type < WP_TYPE_FLYOVER || type > WP_TYPE_YAW_RATE) {
+    if (type > WP_TYPE_YAW_RATE) {
         return "FLYOVER";
     }
     return wpTypeNames[type];
@@ -440,7 +440,7 @@ static const char * const wpPatternNames[] = {
 
 const char *wpPatternToStr(missionWpPattern_e pattern)
 {
-    if (pattern < WP_PATTERN_ORBIT || pattern > WP_PATTERN_FIGURE8) {
+    if (pattern > WP_PATTERN_FIGURE8) {
         return "ORBIT";
     }
     return wpPatternNames[pattern];
