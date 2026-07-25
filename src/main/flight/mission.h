@@ -75,5 +75,6 @@ const char *wpPatternToStr(missionWpPattern_e pattern);
 missionWpPattern_e strToWpPattern(const char *str);
 
 bool missionIsWp1TooFar(void);           // OSD 경고용 getter
+bool missionHasCompleted(void);          // 미션 완료 후 재시작 방지 (무한루프)
 
 #endif // USE_FLIGHT_PLAN

@@ -52,6 +52,7 @@ uint8_t currentMissionWpIndex = 0;
 
 static bool isMissionActive = false;
 static bool wp1TooFar = false;  // 첫 WP가 홈에서 500m 이상 떨어져 있음 (OSD 경고용)
+static bool missionCompletedFlag = false;  // 미션 완료 후 재시작 방지 (무한루프)
 
 // 미션 타임아웃 5분
 #define MISSION_WP_TIMEOUT_US 300000000
@@ -112,6 +113,15 @@ void missionStart(void)
         return;
     }
 
+    // 🆕 미션 완료 후 재시작 방지: 이미 모든 WP를 소진한 상태면 early return
+    // (missionStopAndGoHome()에 의해 missionCompletedFlag=true 설정됨)
+    // 다른 모드(셔틀/레스큐)로 전환 후 재진입 시에는 missionStop()이 호출되므로
+    // missionCompletedFlag가 유지되어 재시작이 차단됨 → missionClear() 또는
+    // missionStart() 진입 시 리셋 필요
+    if (missionCompletedFlag) {
+        return;
+    }
+
     // 🆕 첫 번째 Waypoint 홈 거리 검증 (안전장치)
     if (!missionValidateFirstWaypoint()) {
         // 첫 WP가 홈에서 500m 이상 떨어져 있음 → 미션 취소, 일반 Rescue로 Fallback
@@ -123,6 +133,7 @@ void missionStart(void)
 
     currentMissionWpIndex = 0;
     isMissionActive = true;
+    missionCompletedFlag = false;  // 새 미션 시작 시 플래그 리셋
     wpEntryTime = micros();
     prevDistCm = -1.0f;
     wasClosing = false;
@@ -138,12 +149,14 @@ void missionStop(void)
     prevDistCm = -1.0f;
     wasClosing = false;
     wpGlideInitialized = false;
+    missionCompletedFlag = false;  // 🆕 다른 모드 전환 시 재진입 가능하도록 리셋
 }
 
 void missionStopAndGoHome(void)
 {
     // 미션 중지 + 홈 귀환 (정상 완료 시 사용)
     missionStop();
+    missionCompletedFlag = true;  // 🆕 모든 WP 완료 표시 (재시작 방지)
 
     if (STATE(GPS_FIX_HOME)) {
         gpsRescueResetState();
@@ -329,6 +342,7 @@ void missionClear(void)
     currentMissionWpIndex = 0;
     isMissionActive = false;
     wp1TooFar = false;
+    missionCompletedFlag = false;  // 🆕 WP 클리어 시 완료 플래그도 리셋
 
     // PG에도 반영
     missionConfigMutable()->waypointCount = 0;
@@ -474,6 +488,11 @@ bool missionValidateFirstWaypoint(void)
 bool missionIsWp1TooFar(void)
 {
     return wp1TooFar;
+}
+
+bool missionHasCompleted(void)
+{
+    return missionCompletedFlag;
 }
 
 #endif // USE_FLIGHT_PLAN
