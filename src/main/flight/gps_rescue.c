@@ -530,9 +530,10 @@ static void handleShuttleProgress(void)
     bool touchedByCPA = false;
 
     // CPA 판정 로직: 목표물 근처에서만 CPA 활성화
+    // 새 GPS 데이터가 있을 때만 CPA 평가 (동일 거리 반복 평가로 인한 조기 전환 방지)
     float activationThresholdCm = GPS_RESCUE_TOUCH_ACTIVATION_CM; 
 
-    if (dCm < activationThresholdCm) {
+    if (newGPSData && dCm < activationThresholdCm) {
         if (cpaDistToTargetCm < 0.0f) {
             cpaDistToTargetCm = dCm;
             cpaWasClosing = true;
@@ -547,9 +548,8 @@ static void handleShuttleProgress(void)
         cpaDistToTargetCm = dCm;
     }
     
-    // 근접 폴백 포함 터치 판정
-    // 근접 터치 판정
-    if (touchedByCPA || dCm < GPS_RESCUE_TOUCH_PROXIMITY_CM) {
+    // 근접 폴백 포함 터치 판정 — 새 GPS 데이터가 있을 때만 전환
+    if (newGPSData && (touchedByCPA || dCm < GPS_RESCUE_TOUCH_PROXIMITY_CM)) {
         // [중요] 다음 타겟 비행을 위해 CPA 상태 완전 리셋 (-1로 초기화)
         cpaDistToTargetCm = -1.0f; 
         cpaWasClosing     = false;
@@ -1309,6 +1309,9 @@ static uint16_t getRescueAuxValue(void)
 void gpsRescueUpdate(void)
 {
     if (!FLIGHT_MODE(GPS_RESCUE_MODE)) {
+#ifdef USE_FLIGHT_PLAN
+        missionStop();
+#endif
         gpsRescueStop();
     } else if (FLIGHT_MODE(GPS_RESCUE_MODE) && rescueState.phase == RESCUE_IDLE) {
         // 3-way Aux 분기: <1400 셔틀 / 1400~1600 Autopilot / 1600+ Rescue
@@ -1370,7 +1373,9 @@ void gpsRescueUpdate(void)
         }
         performSanityChecks();            // 안전 진단 (GPS 손실 등)
         rescueAttainPosition();           // handleMissionPhase(): WP 좌표 그대로 사용
-        missionCheckAdvance();            // ①이 세팅한 distanceToTargetCm 기준 CPA 판정 → WP++
+        if (newGPSData) {
+            missionCheckAdvance();        // 새 GPS 데이터 있을 때만 CPA 판정 → WP++
+        }
         newGPSData = false;
         return;                           // 기존 switch 분기 건너뜀
     }
