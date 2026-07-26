@@ -410,56 +410,34 @@ float targetFinalPitch = (midPitch * 100.0f) + rawPitchLimited;
  */
 static void initShuttlePoints(void)
 {
-    // Home fix가 없는 무한셔틀: 기체 헤딩 기준 좌(A) / 우(B) 포인트 생성
-    if (shuttleInfinite && !STATE(GPS_FIX_HOME)) {
+    // 포인트 A는 모드에 따라 결정
+    if (shuttleInfinite) {
         rescuePointC.lat = gpsSol.llh.lat;
         rescuePointC.lon = gpsSol.llh.lon;
-        shuttlePointA    = rescuePointC;
-
-        float headingDeg = (float)attitude.values.yaw / 10.0f;  // decidegrees → degrees
-        float headingRad = DEGREES_TO_RADIANS(headingDeg);
-        float halfDist   = shuttleDistance * 0.5f;
-        float cosLat     = fmaxf(fabsf(cosf(DEGREES_TO_RADIANS((float)gpsSol.llh.lat * 1e-7f))), 0.01f);
-
-        float leftRad  = headingRad - (M_PIf * 0.5f);  // 헤딩 좌측 90도
-        float rightRad = headingRad + (M_PIf * 0.5f);  // 헤딩 우측 90도
-
-        shuttlePointA.lat = gpsSol.llh.lat + (int32_t)(cosf(leftRad)  * halfDist / 111111.0f * 1e7f);
-        shuttlePointA.lon = gpsSol.llh.lon + (int32_t)(sinf(leftRad)  * halfDist / (111111.0f * cosLat) * 1e7f);
-
-        shuttlePointB.lat = gpsSol.llh.lat + (int32_t)(cosf(rightRad) * halfDist / 111111.0f * 1e7f);
-        shuttlePointB.lon = gpsSol.llh.lon + (int32_t)(sinf(rightRad) * halfDist / (111111.0f * cosLat) * 1e7f);
-
+        shuttlePointA = rescuePointC;
     } else {
-        // 포인트 A는 모드에 따라 결정
-        if (shuttleInfinite) {
-            rescuePointC.lat = gpsSol.llh.lat;
-            rescuePointC.lon = gpsSol.llh.lon;
-            shuttlePointA = rescuePointC;
-        } else {
-            shuttlePointA = rescuePointA;
-        }
-
-        // A에서 홈으로의 방향 계산 (B포인트를 A-홈 일직선상에 배치하기 위함)
-        int32_t dLat = GPS_home[0] - shuttlePointA.lat;
-        int32_t dLon = GPS_home[1] - shuttlePointA.lon;
-
-        float latDegF = (float)shuttlePointA.lat * 1e-7f;
-        float cosLat = fmaxf(fabsf(cosf(DEGREES_TO_RADIANS(latDegF))), 0.01f);
-
-        float dLonMeter = (float)dLon * 111111.0f * cosLat / 1e7f;
-        float dLatMeter = (float)dLat * 111111.0f / 1e7f;
-
-        // A -> Home 방향 벡터의 각도 (라디안)
-        float angleToHomeRad = atan2f(dLonMeter, dLatMeter);
-
-        // 포인트 B는 포인트 A에서 홈 방향으로 shuttleDistance 만큼 떨어진 지점
-        int32_t latOffset = (int32_t)(cosf(angleToHomeRad) * shuttleDistance / 111111.0f * 1e7f);
-        int32_t lonOffset = (int32_t)(sinf(angleToHomeRad) * shuttleDistance / (111111.0f * cosLat) * 1e7f);
-
-        shuttlePointB.lat = shuttlePointA.lat + latOffset;
-        shuttlePointB.lon = shuttlePointA.lon + lonOffset;
+        shuttlePointA = rescuePointA;
     }
+
+    // A에서 홈으로의 방향 계산 (B포인트를 A-홈 일직선상에 배치하기 위함)
+    int32_t dLat = GPS_home[0] - shuttlePointA.lat;
+    int32_t dLon = GPS_home[1] - shuttlePointA.lon;
+
+    float latDegF = (float)shuttlePointA.lat * 1e-7f;
+    float cosLat = fmaxf(fabsf(cosf(DEGREES_TO_RADIANS(latDegF))), 0.01f);
+
+    float dLonMeter = (float)dLon * 111111.0f * cosLat / 1e7f;
+    float dLatMeter = (float)dLat * 111111.0f / 1e7f;
+
+    // A -> Home 방향 벡터의 각도 (라디안)
+    float angleToHomeRad = atan2f(dLonMeter, dLatMeter);
+
+    // 포인트 B는 포인트 A에서 홈 방향으로 shuttleDistance 만큼 떨어진 지점
+    int32_t latOffset = (int32_t)(cosf(angleToHomeRad) * shuttleDistance / 111111.0f * 1e7f);
+    int32_t lonOffset = (int32_t)(sinf(angleToHomeRad) * shuttleDistance / (111111.0f * cosLat) * 1e7f);
+
+    shuttlePointB.lat = shuttlePointA.lat + latOffset;
+    shuttlePointB.lon = shuttlePointA.lon + lonOffset;
 
     shuttleTargetB = true; // 먼저 B로 향함
     currentShuttleTrips = 0.0f;
@@ -1278,6 +1256,15 @@ void gpsRescueResetState(void)
 // 무한셔틀 진입 — mission.c 등 외부 모듈에서 호출
 void gpsRescueStartShuttleInfinite(void)
 {
+    if (!STATE(GPS_FIX_HOME)) {
+        // 홈 포인트가 없으면 기존 레스큐 로직(do nothing)으로 분기
+        gpsRescueResetState();
+        shuttleInfinite = false;
+        rescueState.failure = RESCUE_NO_HOME_POINT;
+        rescueState.phase = RESCUE_DO_NOTHING;
+        return;
+    }
+
     gpsRescueResetState();
     shuttleInfinite = true;
     rescueState.intent.yawAttenuator = 1.0f;
@@ -1351,10 +1338,16 @@ void gpsRescueUpdate(void)
         // 3-way Aux 분기: <1400 셔틀 / 1400~1600 Autopilot / 1600+ Rescue
         const uint16_t auxVal = getRescueAuxValue();
         if (failsafeIsReceivingRxData() && auxVal < 1400) {
-            shuttleInfinite = true;
-            rescueState.intent.yawAttenuator = 1.0f;
-            initShuttlePoints();
-            rescueState.phase = RESCUE_SHUTTLE_INFINITE;
+            if (!STATE(GPS_FIX_HOME)) {
+                // 홈 포인트가 없으면 do nothing 분기로 기존 레스큐 로직 사용
+                rescueState.failure = RESCUE_NO_HOME_POINT;
+                rescueState.phase = RESCUE_DO_NOTHING;
+            } else {
+                shuttleInfinite = true;
+                rescueState.intent.yawAttenuator = 1.0f;
+                initShuttlePoints();
+                rescueState.phase = RESCUE_SHUTTLE_INFINITE;
+            }
 #ifdef USE_FLIGHT_PLAN
         } else if (failsafeIsReceivingRxData() && auxVal < 1600 && rescueAuxEnteredMissionBand()) {
             missionStart();     // waypoint 있으면 WP #1, 없으면 Rescue로 넘어감
@@ -1467,17 +1460,9 @@ void gpsRescueUpdate(void)
                                     &rescueState.intent.distanceToTargetCm, &rescueState.intent.directionToTargetCd);
 
             if (!STATE(GPS_FIX_HOME)) {
-                // home fix 없지만 GPS fix 있고 무한셔틀 트리거 → 헤딩 기반 무한셔틀 진입
-                if (STATE(GPS_FIX) && failsafeIsReceivingRxData() && getRescueAuxValue() < 1400) {
-                    initialiseRescueValues();
-                    shuttleInfinite = true;
-                    rescueState.intent.yawAttenuator = 1.0f;
-                    initShuttlePoints();
-                    rescueState.phase = RESCUE_SHUTTLE_INFINITE;
-                } else {
-                    rescueState.failure = RESCUE_NO_HOME_POINT;
-                    rescueState.phase = RESCUE_DO_NOTHING;
-                }
+                // 홈 포인트가 없으면 do nothing 분기로 기존 레스큐 로직 사용
+                rescueState.failure = RESCUE_NO_HOME_POINT;
+                rescueState.phase = RESCUE_DO_NOTHING;
             } else if (rescueState.sensor.distanceToHomeM < 30.0F && !aPointValid) {
                 // 30m 이내 홈거리에서 A포인트가 없을때  레스큐 실행 시 아무것도 하지 않음 (안전 예방)
                 rescueState.phase = RESCUE_DO_NOTHING;
@@ -1520,7 +1505,7 @@ void gpsRescueUpdate(void)
             if (failsafeIsReceivingRxData()) {
                 const uint16_t aux = getRescueAuxValue();
                 if (aux < 1400) {
-                    shuttleInfinite = true; initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE; break;
+                    if (!STATE(GPS_FIX_HOME)) { rescueState.failure = RESCUE_NO_HOME_POINT; rescueState.phase = RESCUE_DO_NOTHING; } else { shuttleInfinite = true; initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE; } break;
                 }
 #ifdef USE_FLIGHT_PLAN
                 if (aux < 1600 && rescueAuxEnteredMissionBand()) {  // BUG 3/5: 상승 엣지에서만 재진입
@@ -1543,7 +1528,7 @@ case RESCUE_FLY_HOME:
     if (failsafeIsReceivingRxData()) {
         const uint16_t aux = getRescueAuxValue();
         if (aux < 1400) {
-            shuttleInfinite = true; initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE; break;
+            if (!STATE(GPS_FIX_HOME)) { rescueState.failure = RESCUE_NO_HOME_POINT; rescueState.phase = RESCUE_DO_NOTHING; } else { shuttleInfinite = true; initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE; } break;
         }
 #ifdef USE_FLIGHT_PLAN
         if (aux < 1600 && rescueAuxEnteredMissionBand()) {  // BUG 3/5: 상승 엣지에서만 재진입
@@ -1666,7 +1651,7 @@ case RESCUE_FLY_HOME:
 
         case RESCUE_SHUTTLE_DESCENT:
             if (failsafeIsReceivingRxData() && getRescueAuxValue() < 1400) {
-                shuttleInfinite = true; initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE; break;
+                if (!STATE(GPS_FIX_HOME)) { rescueState.failure = RESCUE_NO_HOME_POINT; rescueState.phase = RESCUE_DO_NOTHING; } else { shuttleInfinite = true; initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE; } break;
             }
 
             // 셔틀 하강 전 구간 하강고도 도달 감지
@@ -1680,7 +1665,7 @@ case RESCUE_FLY_HOME:
 
         case RESCUE_DESCENT:
             if (failsafeIsReceivingRxData() && getRescueAuxValue() < 1400) {
-                shuttleInfinite = true; initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE; break;
+                if (!STATE(GPS_FIX_HOME)) { rescueState.failure = RESCUE_NO_HOME_POINT; rescueState.phase = RESCUE_DO_NOTHING; } else { shuttleInfinite = true; initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE; } break;
             }
             // 랜딩 전환 조건: 홈30m이내 + 착륙고도(landingAlt) 모두 만족시 랜딩 시작
             if (rescueState.sensor.distanceToHomeM <= 30.0f && rescueState.sensor.currentAltitudeCm <= (landingAlt * 100.0f)) {
