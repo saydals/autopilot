@@ -547,11 +547,6 @@ static void handleShuttleProgress(void)
         }
     }
 
-    // 셔틀 진행 방향 추적 보완: B로 향하는 중이고 충분히 멀어지면 HeadingToA 해제
-    if (shuttleTargetB && distToTargetCm < (shuttleDistance * 100.0f * 0.8f)) {
-        // (할당 제거됨 - dead variable)
-    }
-
     // 셔틀 전용 sbankGain 사용
     float targetBankDeg = -(error * sbankGain);
 
@@ -938,7 +933,7 @@ static void rescueAttainPosition(void)
             cpaWasClosing     = false;
             descentAltReached = false;  // [Fix] 레스큐 초기화 시 고도 래치 리셋
             turnDirectionSign = 0;
-            prevDistanceToTargetCm = 0.0f;  // velocityToTargetCmS 초기화용
+            prevDistanceToTargetCm = -1.0f;  // sentinel: sensorUpdate()에서 현재 거리로 초기화하여 velocity 스파이크 방지
             // 새 A포인트를 생성하지 않고 낡은 좌표로 비행하는 버그가 발생함.
             if ((int)descentAlt % 2 != 0) {
                 aPointValid = false; 
@@ -1132,7 +1127,12 @@ static void sensorUpdate(void)
         GPS_distance_cm_bearing(&gpsSol.llh.lat, &gpsSol.llh.lon,
                                 &currentVCLat, &currentVCLon,
                                 &distToTargetCm, &bearingToTargetCd);
-        rescueState.sensor.velocityToTargetCmS = ((prevDistanceToTargetCm - (float)distToTargetCm) / rescueState.sensor.gpsDataIntervalSeconds);
+        if (prevDistanceToTargetCm < 0.0f) {
+            // sentinel: 첫 프레임에는 velocity를 0으로 설정하여 스파이크 방지
+            rescueState.sensor.velocityToTargetCmS = 0.0f;
+        } else {
+            rescueState.sensor.velocityToTargetCmS = ((prevDistanceToTargetCm - (float)distToTargetCm) / rescueState.sensor.gpsDataIntervalSeconds);
+        }
         prevDistanceToTargetCm = (float)distToTargetCm;
     }
 

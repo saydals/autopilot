@@ -387,6 +387,10 @@ bool missionRemove(int idx)
     // currentMissionWpIndex 보정 (삭제된 WP보다 뒤에 있었으면 인덱스 감소)
     if (currentMissionWpIndex > idx && currentMissionWpIndex > 0) {
         currentMissionWpIndex--;
+    } else if (currentMissionWpIndex == idx && currentMissionWpIndex < missionWpCount) {
+        // 현재 활성 WP가 삭제됨 → 새 WP가 같은 위치로 슬라이드됨
+        // missionApplyWaypoint()로 타겟 좌표/고도 즉시 갱신하여 stale 좌표 비행 방지
+        missionApplyWaypoint();
     }
 
     // PG에도 반영
