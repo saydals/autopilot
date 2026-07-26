@@ -255,8 +255,8 @@ bool missionCheckAdvance(void)
             missionStopAndGoHome();
         } else {
             wpEntryTime = micros();
-            prevDistCm = -1.0f;
-            wasClosing = false;
+            prevDistCm = 200000.0f;
+            wasClosing = true;
             missionApplyWaypoint();
         }
         return true;
@@ -276,8 +276,8 @@ bool missionCheckAdvance(void)
                     missionStopAndGoHome();
                 } else {
                     wpEntryTime = micros();
-                    prevDistCm = -1.0f;
-                    wasClosing = false;
+                    prevDistCm = 200000.0f;
+                    wasClosing = true;
                     missionApplyWaypoint();
                 }
                 return true;
@@ -300,15 +300,15 @@ bool missionCheckAdvance(void)
                 missionStopAndGoHome();
             } else {
                 wpEntryTime = micros();
-                prevDistCm = -1.0f;
-                wasClosing = false;
+                prevDistCm = 200000.0f;
+                wasClosing = true;
                 missionApplyWaypoint();
             }
             return true;
         }
     } else {
         // 범위 밖에서는 prevDistCm 리셋 (다시 진입 시 신선한 측정)
-        prevDistCm = -1.0f;
+        prevDistCm = 200000.0f;
     }
 
     return false;
