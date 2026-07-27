@@ -24,13 +24,11 @@
 
 #include "pg/gps_rescue.h"
 
-// Mission 모듈에서 사용하는 상수 (gps_rescue.c에서 이동)
-#define GPS_RESCUE_TOUCH_ACTIVATION_CM       2000.0f
-#define GPS_RESCUE_TOUCH_PROXIMITY_CM        500.0f
-
-// CPA(Closest Point of Approach) 터치 판정 내부 상수
-#define GPS_RESCUE_CPA_HYSTERESIS_CM     20.0f   // 거리 미분 히스테리시스 (노이즈 필터)
-#define GPS_RESCUE_CPA_RESET_CM          200000.0f // 터치 감지 후 상태 리셋 sentinel
+// CPA(Closest Point of Approach) 터치 판정 상수
+#define GPS_RESCUE_TOUCH_ACTIVATION_CM       2000.0f   // CPA 활성화 거리 (20m)
+#define GPS_RESCUE_TOUCH_PROXIMITY_CM        500.0f   // 근접 폴백 (5m)
+#define GPS_RESCUE_CPA_HYSTERESIS_CM          20.0f   // 거리 미분 히스테리시스 (노이즈 필터)
+#define GPS_RESCUE_CPA_RESET_CM          200000.0f   // 터치 감지 후 상태 리셋 sentinel (2km)
 #define GPS_RESCUE_CPA_UNINITIALIZED     -1.0f   // CPA 상태 변수 미초기화 sentinel
 
 #define TASK_GPS_RESCUE_RATE_HZ 100  // in sync with altitude task rate
