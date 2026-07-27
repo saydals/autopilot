@@ -54,9 +54,6 @@ static bool isMissionActive = false;
 static bool wp1TooFar = false;  // 첫 WP가 홈에서 500m 이상 떨어져 있음 (OSD 경고용)
 static bool missionCompletedFlag = false;  // 미션 완료 후 재시작 방지 (무한루프)
 
-// 미션 타임아웃 5분
-#define MISSION_WP_TIMEOUT_US 300000000
-
 static timeUs_t wpEntryTime = 0;
 static float prevDistCm = -1.0f;
 static bool wasClosing = false;
@@ -248,67 +245,20 @@ bool missionCheckAdvance(void)
         return false;
     }
 
-    // 타임아웃 — 5분 초과 시 강제 Skip
-    if (cmpTimeUs(micros(), wpEntryTime) > MISSION_WP_TIMEOUT_US) {
+    const float dCm = (float)rescueState.intent.distanceToTargetCm;
+
+    if (gpsRescueCPATouchCheck(dCm, GPS_RESCUE_TOUCH_ACTIVATION_CM,
+                                             GPS_RESCUE_TOUCH_PROXIMITY_CM,
+                                             &prevDistCm, &wasClosing)) {
+        // WP 전환
         currentMissionWpIndex++;
         if (currentMissionWpIndex >= missionWpCount) {
             missionStopAndGoHome();
         } else {
             wpEntryTime = micros();
-            prevDistCm = 200000.0f;
-            wasClosing = true;
             missionApplyWaypoint();
         }
         return true;
-    }
-
-    // CPA (Closest Point of Approach) 도착 체크 — 계획서 v2 wasClosing 로직
-    const float dCm = (float)rescueState.intent.distanceToTargetCm;
-
-    if (dCm < GPS_RESCUE_TOUCH_ACTIVATION_CM && dCm >= 0) {
-        if (prevDistCm < 0) {
-            prevDistCm = dCm;
-            wasClosing = false;  // 새 WP 진입 시 wasClosing 명시적 리셋 (이전 WP 잔류값 방지)
-            if (dCm < GPS_RESCUE_TOUCH_PROXIMITY_CM) {
-                // 첫 진입부터 이미 근접 범위 내 → 즉시 WP 전환
-                currentMissionWpIndex++;
-                if (currentMissionWpIndex >= missionWpCount) {
-                    missionStopAndGoHome();
-                } else {
-                    wpEntryTime = micros();
-                    prevDistCm = 200000.0f;
-                    wasClosing = true;
-                    missionApplyWaypoint();
-                }
-                return true;
-            }
-            return false;
-        }
-
-        bool isClosing = (dCm < prevDistCm - 20.0f);
-        bool touchCPA = false;
-        if (!isClosing && wasClosing) {
-            touchCPA = true;   // 멀어지기 시작했으므로 CPA 도달
-        }
-        wasClosing = isClosing;
-        prevDistCm = dCm;
-
-        if (touchCPA || dCm < GPS_RESCUE_TOUCH_PROXIMITY_CM) {
-            // WP 전환
-            currentMissionWpIndex++;
-            if (currentMissionWpIndex >= missionWpCount) {
-                missionStopAndGoHome();
-            } else {
-                wpEntryTime = micros();
-                prevDistCm = 200000.0f;
-                wasClosing = true;
-                missionApplyWaypoint();
-            }
-            return true;
-        }
-    } else {
-        // 범위 밖에서는 prevDistCm 리셋 (다시 진입 시 신선한 측정)
-        prevDistCm = 200000.0f;
     }
 
     return false;

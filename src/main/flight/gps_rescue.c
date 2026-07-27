@@ -210,6 +210,58 @@ static void  handleDoNothingPhase(void);
 static void  handleMissionPhase(void);   // 🆕 미션 웨이포인트 비행 전용 핸들러
 static float getSmartHeadingError(float currentError);
 static void  updateRescueParams(void);
+/* ================================================================
+ * gpsRescueCPATouchCheck — CPA(Closest Point of Approach) 터치 판정 공통 함수
+ * ================================================================
+ *
+ * 거리 미분(distance derivative) 방식으로 타겟 포인트 통과를 감지한다.
+ * 거리가 감소했다 증가로 전환되면(= 최근접점 통과) 또는
+ * proximityCeilCm 이내에 도달하면 true를 반환한다.
+ *
+ * 호출자가 상태 변수(pCpDist/pCpClosing)를 포인터로 제공하므로,
+ * 셔틀/WP/FLY_HOME 등 모든 맥락에서 동일 로직 재사용 가능.
+ *
+ * @param dCm                    현재 타겟까지 거리 (cm)
+ * @param activationThresholdCm  CPA 활성화 거리 임계값
+ * @param proximityCeilCm        근접 폴백 임계값 (이 거리 이내면 즉시 터치)
+ * @param pCpDist                [-1:미초기화 | 200000:리셋상태 | 기타:이전거리]
+ * @param pCpClosing             이전 프레임에서 거리 감소 중이었는지
+ * @return true: 타겟 통과(터치) 감지
+ */
+bool gpsRescueCPATouchCheck(float dCm, float activationThresholdCm, float proximityCeilCm,
+                                  float *pCpDist, bool *pCpClosing)
+{
+    bool touched = false;
+
+    if (dCm < proximityCeilCm) {
+        // 근접 폴백: proximityCeilCm 이내 도달 = 즉시 터치
+        touched = true;
+    } else if (dCm < activationThresholdCm) {
+        if (*pCpDist < 0.0f) {
+            // 첫 진입: 상태 초기화
+            *pCpDist = dCm;
+            *pCpClosing = true;
+        } else {
+            // 20cm 히스테리시스로 노이즈 내성 강화
+            bool isClosing = (dCm < *pCpDist - 20.0f);
+            if (!isClosing && *pCpClosing) {
+                touched = true; // 거리 감소→증가 전환 = 최근접점 통과
+            }
+            *pCpClosing = isClosing;
+        }
+        *pCpDist = dCm;
+    }
+
+    if (touched) {
+        // 터치 감지 시 상태 리셋 (오작동 방지를 큰 값으로 lock)
+        *pCpDist = 200000.0f;
+        *pCpClosing = true;
+    }
+
+    return touched;
+}
+
+
 
 /* ================================================================
  * 초기화 및 기초 함수
@@ -490,47 +542,12 @@ static void handleShuttleProgress(void)
     float absError = fabsf(error);
     rescueState.sensor.absErrorAngle = absError; // 다른 단계에서 고도 제어 구간 판정을 위해 공유
 
-    // ----------------------------------------------------------------
-    // 포인트 터치 판정 — CPA(Closest Point of Approach) 기반 거리 미분
-    //
-    // 설계 근거:
-    //   타겟까지의 거리가 감소하다가 증가로 전환되는 순간 = 최근접점 통과
-    //   정확 통과·오버슈트·바람 빗겨 통과 모든 경우를 커버한다.
-    //
-    //   touchedByCPA      : 거리 미분 부호 전환 (감소→증가), 15cm 히스테리시스
-    //                       GPS 1Hz 노이즈 환경에서 5cm보다 안정적
-    //                       + 셔틀거리 1.5배 이내에서만 인정 (원거리 오검출 방지)
-    //   touchedByProximity: 3m 이내 도달 (직진 정확 통과 또는 CPA 미검출 폴백)
-    //
-    //   전역 변수 cpaDistToTargetCm/cpaWasClosing 사용:
-    //   initShuttlePoints() 및 RESCUE_INITIALIZE에서 외부 리셋 가능
-    // ----------------------------------------------------------------
     float dCm = (float)distToTargetCm;
-    bool touchedByCPA = false;
 
-    // CPA 판정 로직: 목표물 근처에서만 CPA 활성화
-    float activationThresholdCm = GPS_RESCUE_TOUCH_ACTIVATION_CM; 
-
-    if (dCm < activationThresholdCm) {
-        if (cpaDistToTargetCm < 0.0f) {
-            cpaDistToTargetCm = dCm;
-            cpaWasClosing = true;
-        } else {
-            // 20cm 히스테리시스로 노이즈 내성 강화
-            bool isClosing = (dCm < cpaDistToTargetCm - 20.0f);
-            if (!isClosing && cpaWasClosing) {
-                touchedByCPA = true; // 거리가 줄다가 늘기 시작 = 최근접점 통과 판정
-            }
-            cpaWasClosing = isClosing;
-        }
-        cpaDistToTargetCm = dCm;
-    }
-    
-    // 근접 폴백 포함 터치 판정
-    if (touchedByCPA || dCm < GPS_RESCUE_TOUCH_PROXIMITY_CM) {
-        // [중요] 다음 타겟 비행을 위해 CPA 상태 완전 리셋 (오작동 방지용 큰 값 설정)
-        cpaDistToTargetCm = 200000.0f;
-        cpaWasClosing     = true;
+    // CPA 터치 판정 — 공통 함수 사용 (shuttle/WP/FLY_HOME 동일 로직)
+    if (gpsRescueCPATouchCheck(dCm, GPS_RESCUE_TOUCH_ACTIVATION_CM,
+                                         GPS_RESCUE_TOUCH_PROXIMITY_CM,
+                                         &cpaDistToTargetCm, &cpaWasClosing)) {
         yawHeadingIterm   = 0.0f;  // 타겟 전환 시 급격한 방향 전환으로 인한 I-term 킥(Kick) 방지
         turnDirectionSign = 0;
 
@@ -542,10 +559,11 @@ static void handleShuttleProgress(void)
             // A 도착 시 하강 고도 조건 만족하면 즉시 DESCENT로 전환
             if (rescueState.phase == RESCUE_SHUTTLE_DESCENT && descentAltReached) {
                 rescueState.phase = RESCUE_DESCENT;
-                return; // 셔틀 진행 불필요
+                return;
             }
         }
     }
+
 
     // 셔틀 전용 sbankGain 사용
     float targetBankDeg = -(error * sbankGain);
@@ -1568,24 +1586,9 @@ case RESCUE_FLY_HOME:
             // 자동으로 실행되므로 별도 정렬 처리 불필요.
             // 목표물 근처에서만 CPA 감시 활성화
             float dCm = (float)distToTargetCm;
-            float activationThresholdCm = GPS_RESCUE_TOUCH_ACTIVATION_CM;
-
-            if (dCm < activationThresholdCm) {
-                if (cpaDistToTargetCm < 0.0f) {
-                    // CPA 첫 진입: 초기화
-                    cpaDistToTargetCm = dCm;
-                    cpaWasClosing = true;
-                } else {
-                    bool isClosingNow = (dCm < cpaDistToTargetCm - 20.0f);
-                    if (!isClosingNow && cpaWasClosing) {
-                        shouldTransition = true; // 거리 감소→증가 전환 = 최근접점 통과
-                    }
-                    cpaWasClosing = isClosingNow;
-                }
-                cpaDistToTargetCm = dCm;
-            }
-            // 근접 폴백 (CPA 미검출 대비)
-            if (dCm < GPS_RESCUE_TOUCH_PROXIMITY_CM) {
+            if (gpsRescueCPATouchCheck(dCm, GPS_RESCUE_TOUCH_ACTIVATION_CM,
+                                                     GPS_RESCUE_TOUCH_PROXIMITY_CM,
+                                                     &cpaDistToTargetCm, &cpaWasClosing)) {
                 shouldTransition = true;
             }
             // ─────────────────────────────────────────────────────────────────
