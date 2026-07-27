@@ -1557,6 +1557,8 @@ case MSP_NAME:
         sbufWriteU16(dst, gpsRescueConfig()->minStartDistM);
         // Added in API version 1.46
         sbufWriteU16(dst, gpsRescueConfig()->initialClimbM);
+        // Added in API version 1.49
+        sbufWriteU16(dst, gpsRescueConfig()->descentBankLimit);
         break;
 
     case MSP_GPS_RESCUE_PIDS:
@@ -2888,6 +2890,10 @@ static mspResult_e mspProcessInCommand(mspDescriptor_t srcDesc, int16_t cmdMSP, 
         if (sbufBytesRemaining(src) >= 2) {
             // Added in API version 1.46
             gpsRescueConfigMutable()->initialClimbM = sbufReadU16(src);
+        }
+        if (sbufBytesRemaining(src) >= 2) {
+            // Added in API version 1.49
+            gpsRescueConfigMutable()->descentBankLimit = sbufReadU16(src);
         }
         break;
 
