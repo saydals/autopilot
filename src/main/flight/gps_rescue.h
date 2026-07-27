@@ -28,6 +28,11 @@
 #define GPS_RESCUE_TOUCH_ACTIVATION_CM       2000.0f
 #define GPS_RESCUE_TOUCH_PROXIMITY_CM        500.0f
 
+// CPA(Closest Point of Approach) 터치 판정 내부 상수
+#define GPS_RESCUE_CPA_HYSTERESIS_CM     20.0f   // 거리 미분 히스테리시스 (노이즈 필터)
+#define GPS_RESCUE_CPA_RESET_CM          200000.0f // 터치 감지 후 상태 리셋 sentinel
+#define GPS_RESCUE_CPA_UNINITIALIZED     -1.0f   // CPA 상태 변수 미초기화 sentinel
+
 #define TASK_GPS_RESCUE_RATE_HZ 100  // in sync with altitude task rate
 
 #ifdef USE_MAG

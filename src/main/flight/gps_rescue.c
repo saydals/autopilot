@@ -237,13 +237,13 @@ bool gpsRescueCPATouchCheck(float dCm, float activationThresholdCm, float proxim
         // 근접 폴백: proximityCeilCm 이내 도달 = 즉시 터치
         touched = true;
     } else if (dCm < activationThresholdCm) {
-        if (*pCpDist < 0.0f) {
+        if (*pCpDist < GPS_RESCUE_CPA_UNINITIALIZED) {
             // 첫 진입: 상태 초기화
             *pCpDist = dCm;
             *pCpClosing = true;
         } else {
             // 20cm 히스테리시스로 노이즈 내성 강화
-            bool isClosing = (dCm < *pCpDist - 20.0f);
+            bool isClosing = (dCm < *pCpDist - GPS_RESCUE_CPA_HYSTERESIS_CM);
             if (!isClosing && *pCpClosing) {
                 touched = true; // 거리 감소→증가 전환 = 최근접점 통과
             }
@@ -254,7 +254,7 @@ bool gpsRescueCPATouchCheck(float dCm, float activationThresholdCm, float proxim
 
     if (touched) {
         // 터치 감지 시 상태 리셋 (오작동 방지를 큰 값으로 lock)
-        *pCpDist = 200000.0f;
+        *pCpDist = GPS_RESCUE_CPA_RESET_CM;
         *pCpClosing = true;
     }
 
@@ -502,7 +502,7 @@ static void initShuttlePoints(void)
     if (mag > 0.1f) { abVecLat = dlat / mag; abVecLon = dlon / mag; }
 
     // CPA 터치 판정 변수 초기화 (새 셔틀 시작 시 이전 상태 제거)
-    cpaDistToTargetCm = -1.0f;
+    cpaDistToTargetCm = GPS_RESCUE_CPA_UNINITIALIZED;
     cpaWasClosing     = false;
     turnDirectionSign = 0;
 }
@@ -947,7 +947,7 @@ static void rescueAttainPosition(void)
             velocityIterm = 0.0f; altitudePitchIterm = 0.0f; yawHeadingIterm = 0.0f;
             shuttleInfinite = false;
             currentShuttleTrips = 0.0f; shuttleTargetB = false; attainAltStartTime = 0;
-            cpaDistToTargetCm = -1.0f;  // CPA 터치 판정 상태 초기화
+            cpaDistToTargetCm = GPS_RESCUE_CPA_UNINITIALIZED;  // CPA 터치 판정 상태 초기화
             cpaWasClosing     = false;
             descentAltReached = false;  // [Fix] 레스큐 초기화 시 고도 래치 리셋
             turnDirectionSign = 0;
@@ -1264,7 +1264,7 @@ void gpsRescueResetState(void)
     currentShuttleTrips = 0.0f;
     shuttleTargetB = false;
     attainAltStartTime = 0;
-    cpaDistToTargetCm = -1.0f;
+    cpaDistToTargetCm = GPS_RESCUE_CPA_UNINITIALIZED;
     cpaWasClosing = false;
     descentAltReached = false;
     turnDirectionSign = 0;
@@ -1444,7 +1444,7 @@ void gpsRescueUpdate(void)
         }
         currentShuttleTrips = 0.0f;
         shuttleTargetB = false;
-        cpaDistToTargetCm = -1.0f;
+        cpaDistToTargetCm = GPS_RESCUE_CPA_UNINITIALIZED;
         cpaWasClosing = false;
         descentAltReached = false;
 
@@ -1604,7 +1604,7 @@ case RESCUE_FLY_HOME:
             rescueState.phase != RESCUE_SHUTTLE &&
             rescueState.phase != RESCUE_SHUTTLE_DESCENT &&
             rescueState.phase != RESCUE_DESCENT) {
-            cpaDistToTargetCm = 200000.0f; // CPA 상태 리셋
+            cpaDistToTargetCm = GPS_RESCUE_CPA_RESET_CM; // CPA 상태 리셋
             cpaWasClosing = true;
             if (shuttleCount == 0.0f) {
                 rescueState.phase = RESCUE_DESCENT;

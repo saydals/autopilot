@@ -132,7 +132,7 @@ void missionStart(void)
     isMissionActive = true;
     missionCompletedFlag = false;  // 새 미션 시작 시 플래그 리셋
     wpEntryTime = micros();
-    prevDistCm = -1.0f;
+    prevDistCm = GPS_RESCUE_CPA_UNINITIALIZED;
     wasClosing = false;
     missionApplyWaypoint();
 }
@@ -143,7 +143,7 @@ void missionStop(void)
     isMissionActive = false;
     wp1TooFar = false;
     wpEntryTime = 0;
-    prevDistCm = -1.0f;
+    prevDistCm = GPS_RESCUE_CPA_UNINITIALIZED;
     wasClosing = false;
     wpGlideInitialized = false;
     missionCompletedFlag = false;  // 🆕 다른 모드 전환 시 재진입 가능하도록 리셋
@@ -280,7 +280,7 @@ void missionInit(void)
     isMissionActive = false;
     wp1TooFar = false;
     wpEntryTime = 0;
-    prevDistCm = -1.0f;
+    prevDistCm = GPS_RESCUE_CPA_UNINITIALIZED;
     wasClosing = false;
     wpGlideInitialized = false;   // 재부팅/재초기화 시 글라이드 상태도 초기화
 }
