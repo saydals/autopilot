@@ -597,7 +597,7 @@ static void handleShuttlePhase(void)
     float absError = rescueState.sensor.absErrorAngle;
     float currentRollDeg = fabsf(attitude.values.roll / 10.0f);
     // 45도 이내 직선 구간이거나 기체가 수평(15도 이내)일 때만 양수 피치 허용
-    bool descentAllowed = (absError < 45.0f) || (currentRollDeg < 15.0f);
+    bool descentAllowed = (absError < 45.0f) || (currentRollDeg < gpsRescueConfig()->descentBankLimit);
     gpsRescueAngle[AI_PITCH] = calculateAltitudePitch(altErrM, true, descentAllowed);
     rescueThrottle = calculateVelocityThrottle();
 }
@@ -614,7 +614,7 @@ static void handleShuttleDescentPhase(void)
     float altErrM = (rescueState.sensor.currentAltitudeCm - rescueState.intent.targetAltitudeCm) * 0.01f;
     float absError = rescueState.sensor.absErrorAngle;
     float currentRollDeg = fabsf(attitude.values.roll / 10.0f);
-    bool descentAllowed = (absError < 45.0f) || (currentRollDeg < 10.0f);
+    bool descentAllowed = (absError < 45.0f) || (currentRollDeg < gpsRescueConfig()->descentBankLimit);
     gpsRescueAngle[AI_PITCH] = calculateAltitudePitch(altErrM, true, descentAllowed);
     rescueThrottle = calculateVelocityThrottle();
 }
@@ -833,7 +833,7 @@ static void handleMissionPhase(void)
     // 고도/속도 제어는 missionUpdateTargetOnly()가 설정한 targetAltitudeCm/targetVelocityCmS 사용
     float altErrM = (rescueState.sensor.currentAltitudeCm - rescueState.intent.targetAltitudeCm) * 0.01f;
     float currentRollDeg = fabsf(attitude.values.roll / 10.0f);
-    bool descentAllowed = (absError < 45.0f) || (currentRollDeg < 15.0f);
+    bool descentAllowed = (absError < 45.0f) || (currentRollDeg < gpsRescueConfig()->descentBankLimit);
     gpsRescueAngle[AI_PITCH] = calculateAltitudePitch(altErrM, false, descentAllowed);
     rescueThrottle = calculateVelocityThrottle();
 }
@@ -890,7 +890,7 @@ static void handleFlyHomePhase(void)
     float altErrM = (rescueState.sensor.currentAltitudeCm - rescueState.intent.targetAltitudeCm) * 0.01f;
     float currentRollDeg = fabsf(attitude.values.roll / 10.0f);
     // 직선 구간(45도 이내)이거나 기체가 수평(15도 이내)일 때 양수 피치 허용하여 안전 확보
-    bool descentAllowed = (absError < 45.0f) || (currentRollDeg < 15.0f);
+    bool descentAllowed = (absError < 45.0f) || (currentRollDeg < gpsRescueConfig()->descentBankLimit);
     gpsRescueAngle[AI_PITCH] = calculateAltitudePitch(altErrM, false, descentAllowed);
     rescueThrottle = calculateVelocityThrottle();
 }

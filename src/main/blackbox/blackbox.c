@@ -1636,6 +1636,8 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GPS_RESCUE_PITCH_CUTOFF, "%d",    gpsRescueConfig()->pitchCutoffHz)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GPS_RESCUE_IMU_YAW_GAIN, "%d",    gpsRescueConfig()->imuYawGain)
 
+    BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GPS_RESCUE_DESCENT_BANK, "%d",    gpsRescueConfig()->descentBankLimit)
+
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GPS_RESCUE_DESCENT_DIST, "%d",    gpsRescueConfig()->descentDistanceM)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GPS_RESCUE_DESCEND_RATE, "%d",    gpsRescueConfig()->descendRate)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GPS_RESCUE_LANDING_ALT, "%d",     gpsRescueConfig()->targetLandingAltitudeM)

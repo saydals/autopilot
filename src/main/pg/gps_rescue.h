@@ -50,6 +50,7 @@ typedef struct gpsRescue_s {
     uint8_t  disarmThreshold;
     uint8_t  pitchCutoffHz;
     uint8_t  imuYawGain;
+    uint8_t  descentBankLimit; // degrees - bank angle threshold for descent allowed during turn (15-45)
 } gpsRescueConfig_t;
 
 PG_DECLARE(gpsRescueConfig_t, gpsRescueConfig);
