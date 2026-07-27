@@ -156,17 +156,15 @@ static timeUs_t birdFlapLastUs = 0;
 // ============================================================
 // Ready-to-Arm Wiggle constants
 // ============================================================
-#define READY_TO_ARM_WIGGLE_DURATION_US     1000000   // 1초 (에일러론 위글)
-#define READY_TO_ARM_WIGGLE_ELEVATOR_EXT_US 1000000   // 추가 1초 (엘리베이터 단독)
+#define READY_TO_ARM_WIGGLE_DURATION_US     1000000   // 1초 (에일러론 위글, WP/GPS 조건 시 동시 위글)
 #define READY_TO_ARM_WIGGLE_INTERVAL_US     10000000  // 10초
 #define READY_TO_ARM_WIGGLE_BOOT_DELAY_MS   5000      // 5초
-#define READY_TO_ARM_WIGGLE_AMPLITUDE       250        // ±250
+#define READY_TO_ARM_WIGGLE_AMPLITUDE       150        // ±150
 #define WIGGLE_STICK_THRESHOLD              20         // rcData가 midrc에서 ±20 이상 벗어나면 사용자 입력
 
 typedef enum {
     WIGGLE_PHASE_IDLE,
-    WIGGLE_PHASE_AILERON,       // 에일러론(+엘리베이터) 동시 위글 (1초)
-    WIGGLE_PHASE_ELEVATOR_ONLY, // 엘리베이터만 단독 위글 (1초 추가)
+    WIGGLE_PHASE_AILERON,       // 에일러론 위글, WP/GPS 조건 시 동시 위글 (1초)
 } wigglePhase_e;
 
 // ============================================================
@@ -768,13 +766,13 @@ static bool isWiggleGpsReady(void)
     return STATE(GPS_FIX) && (gpsSol.numSat >= gpsRescueConfig()->minSats);
 }
 
-// 엘리베이터 위글 조건: GPS OK (Waypoint만으로는 Phase 1 엘리베이터 위글 없음)
+// 엘리베이터 위글 조건: GPS OK + minSats 만족 (WP 존재 시에도 동작)
 static bool isWiggleElevatorReady(void)
 {
     return isWiggleGpsReady();
 }
 
-// 확장 위글 조건: Waypoint 존재 → 엘리베이터 단독 2단계 위글
+// WP(Waypoint) 존재 여부
 static bool isWiggleExtended(void)
 {
     return (missionWpCount > 0);
@@ -826,21 +824,8 @@ static void updateReadyToArmWiggle(void)
         break;
 
     case WIGGLE_PHASE_AILERON:
-        // 에일러론(+엘리베이터) 1초 위글
+        // 에일러론 위글, WP/GPS 조건 시 동시 위글 (1초)
         if (elapsed > READY_TO_ARM_WIGGLE_DURATION_US) {
-            if (isWiggleExtended()) {
-                // GPS+WP 모두 만족 → 엘리베이터 단독 1초 추가
-                wigglePhase = WIGGLE_PHASE_ELEVATOR_ONLY;
-                wiggleStartUs = now;  // 타이머 리셋
-            } else {
-                wigglePhase = WIGGLE_PHASE_IDLE;
-            }
-        }
-        break;
-
-    case WIGGLE_PHASE_ELEVATOR_ONLY:
-        // 엘리베이터 단독 1초 위글
-        if (elapsed > READY_TO_ARM_WIGGLE_ELEVATOR_EXT_US) {
             wigglePhase = WIGGLE_PHASE_IDLE;
         }
         break;
@@ -857,15 +842,22 @@ static int16_t getReadyToArmWiggleOffset(void)
                      * READY_TO_ARM_WIGGLE_AMPLITUDE);
 }
 
-// 엘리베이터 위글 오프셋 (Phase AILERON: elevatorReady 시, Phase ELEVATOR_ONLY: 항상)
+// 엘리베이터 위글 오프셋 (GPS Fix 만족 시 활성, WP 존재 시에도 동작)
 static int16_t getReadyToArmWiggleElevatorOffset(void)
 {
-    if (wigglePhase == WIGGLE_PHASE_AILERON) {
-        // 에일러론 단계에서는 엘리베이터 위글 조건 만족 시에만
-        if (!isWiggleElevatorReady()) return 0;
-    } else if (wigglePhase != WIGGLE_PHASE_ELEVATOR_ONLY) {
-        return 0;
-    }
+    if (wigglePhase != WIGGLE_PHASE_AILERON) return 0;
+    if (!isWiggleElevatorReady()) return 0;
+
+    float t = (float)cmpTimeUs(micros(), wiggleStartUs) * 1e-6f;
+    return (int16_t)(sin_approx(2.0f * M_PIf * (float)servoConfig()->ready_to_arm_wiggle_hz * t)
+                     * READY_TO_ARM_WIGGLE_AMPLITUDE);
+}
+
+// 러더 위글 오프셋 (WP 존재 시 에일러론과 동시에 동작)
+static int16_t getReadyToArmWiggleRudderOffset(void)
+{
+    if (wigglePhase != WIGGLE_PHASE_AILERON) return 0;
+    if (!isWiggleExtended()) return 0;
 
     float t = (float)cmpTimeUs(micros(), wiggleStartUs) * 1e-6f;
     return (int16_t)(sin_approx(2.0f * M_PIf * (float)servoConfig()->ready_to_arm_wiggle_hz * t)
@@ -924,7 +916,7 @@ void servoMixer(void)
         input[INPUT_BIRD_FLAP] = 0;
     }
 
-    // ★ Ready-to-Arm Wiggle (GPS/Waypoint 조건에 따라 엘리베이터 추가 위글)
+    // ★ Ready-to-Arm Wiggle (GPS/WP 조건에 따라 Elevator/Rudder 동시 위글)
     updateReadyToArmWiggle();
     if (birdFlapConfigured) {
         // Bird Flap 사용 시: Roll이 아닌 Bird Flap 서보에 오프셋을 나중에 추가
@@ -932,8 +924,10 @@ void servoMixer(void)
         // Bird Flap 미사용: 기존대로 에일러론(Flapperon) Roll 입력에 오프셋 주입
         input[INPUT_STABILIZED_ROLL] += getReadyToArmWiggleOffset();
     }
-    // 엘리베이터 위글: GPS Fix 또는 Waypoint 존재 시 PITCH에도 오프셋 주입
+    // 엘리베이터 위글: GPS Fix 만족 시 PITCH에도 오프셋 주입
     input[INPUT_STABILIZED_PITCH] += getReadyToArmWiggleElevatorOffset();
+    // 러더 위글: WP 존재 시 YAW에 오프셋 주입 (에일러론과 동시 발동)
+    input[INPUT_STABILIZED_YAW] += getReadyToArmWiggleRudderOffset();
 
     for (int i = 0; i < MAX_SUPPORTED_SERVOS; i++) {
         servo[i] = 0;

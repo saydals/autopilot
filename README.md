@@ -23,7 +23,7 @@
 | 10  | **GPS LED**                     | 사용자 설정 최소 위성 수 완전 만족 시에만 녹색 점등                                                 |
 | 11  | **Servo Range Extension**       | 서보 min/max 범위 확장 시 비례 스케일링 자동 적용 (비대칭/중립 변경 지원, AUX 포워딩 보호)          |
 | 12  | **Board Alignment Tuning Mode** | 스틱으로 보드 정렬값(align_board_roll/pitch/yaw) 실시간 조절                                        |
-| 13  | **Ready-to-Arm Wiggle**         | 에일러론 타면을 주기적으로 흔들어 아밍 가능 상태를 시각적으로 알림                                  |
+| 13  | **Ready-to-Arm Wiggle**         | GPS 만족 시 에일러론+엘리베이터 동시, WP 존재 시 러더 추가 동시 흔들림 (±150)   |
 | 14  | **Servo Trim Mode**             | 조종기 스틱 입력으로 서보 물리 중립(middle) 실시간 조정                                             |
 | 15  | **PID Profile**                 | AUX 스위치로 비행 중 PID 프로파일 즉시 전환                                                         |
 
@@ -216,7 +216,7 @@ Landing 거리는 홈에서 30미터로 하드코딩 되어 있어 수정 불가
 
 ### 수정 파일
 
-`src/main/flight/servos.h`, `src/main/flight/servos.c`, `src/main/cli/settings.c`
+`src/main/flight/servos.c`
 
 ---
 
@@ -314,6 +314,7 @@ AUX에 스로틀을 50% 정도 믹스해두면 스로틀에 따라 날개짓 속
 ## 6. Ready-to-Arm Wiggle (아밍 준비 완료 알림)
 
 에일러론 타면을 주기적으로 흔들어 **시동(Arm)이 가능한 상태**임을 사용자에게 시각적으로 알리는 기능입니다.
+GPS 갯수 만족 시 에일러론과 엘리베이터가 **동시에** 흔들리며, WP(Waypoint)가 존재하면 러더(Rudder)가 **추가로** 에일러론과 동시 흔들립니다 (GPS 만족 시 엘리베이터도 포함).
 
 부저나 LED가 없는 고정익 기체에서 유용하며, 방치 시에도 타면이 움직여 배터리 연결 상태를 시각적으로 경고합니다.
 
@@ -332,6 +333,8 @@ AUX에 스로틀을 50% 정도 믹스해두면 스로틀에 따라 날개짓 속
   └─ [부팅 5초 유예] 자이로 안정화 대기
        └─ [isArmingDisabled() == false]
             └─ ★ 1초간 타면 파닥 (설정된 Hz × sin_approx)
+                 ├─ GPS Fix + minSats 만족 (WP 없음) → 엘리베이터도 동시 흔들림
+                 ├─ WP(Waypoint) 존재 → 러더도 동시 흔들림 (GPS+WP면 엘리베이터+러더 모두)
                  └─ 10초 대기
                       └─ ★ 재파닥 (Disarm 상태 유지 시 무한 반복)
                            └─ [ARM] → 즉시 중단, 순정 조종 신호로 완전 복귀
@@ -343,6 +346,8 @@ AUX에 스로틀을 50% 정도 믹스해두면 스로틀에 따라 날개짓 속
 | 시나리오            | 설명                                                                         |
 | ------------------- | ---------------------------------------------------------------------------- |
 | **GPS 없는 비행기** | 자이로 보정 완료 → `isArmingDisabled()` = false → 즉시 첫 파닥               |
+| **GPS 갯수 만족**    | GPS Fix + minSats 만족 (WP 없음) → 에일러론 + 엘리베이터 동시 흔들림             |
+| **WP 존재**          | GPS Fix + WP 존재 → 에일러론 + 엘리베이터 + 러더 모두 동시 흔들림 (3방향)     |
 | **GPS + 아밍 락**   | 위성 확보 전까지 `isArmingDisabled()` = true → 무동작 → 위성 확보 후 첫 파닥 |
 | **방치 경고**       | Disarm 상태로 기체 방치 시 10초마다 지속적 타면 움직임 → 배터리 과방전 방지  |
 
@@ -360,9 +365,9 @@ AUX에 스로틀을 50% 정도 믹스해두면 스로틀에 따라 날개짓 속
 
 ### 적용 기체
 
-- **Airplane** (FLAPPERON_1, FLAPPERON_2): 각각 +100%, +100%로 동일 방향 → 좌우 함께 흔들림
-- **Flying Wing** (Elevon): FLAPPERON_1(+100%), FLAPPERON_2(-100%) → 반대 방향으로 흔들려 롤 효과 발생
-- **Custom Mixer**: `INPUT_STABILIZED_ROLL`을 사용하는 모든 룰에 자동 적용
+- **Airplane** (FLAPPERON_1, FLAPPERON_2): 각각 +100%, +100%로 동일 방향 → 좌우 함께 흔들림. WP 존재 시 러더도 동시 흔들림
+- **Flying Wing** (Elevon): FLAPPERON_1(+100%), FLAPPERON_2(-100%) → 반대 방향으로 흔들려 롤 효과 발생. WP 존재 시 러더도 동시 흔들림
+- **Custom Mixer**: `INPUT_STABILIZED_ROLL`을 사용하는 모든 룰에 자동 적용. WP 존재 시 `INPUT_STABILIZED_YAW` 규칙에도 러더 위글 자동 적용
 
 ### 수정 파일
 
