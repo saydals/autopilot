@@ -24,10 +24,12 @@
 
 #include "pg/gps_rescue.h"
 
-// CPA(Closest Point of Approach) 터치 판정 상수
+// CPA(Closest Point of Approach) 터치 판정 상수 — 사용자 튜닝 가능
 #define GPS_RESCUE_TOUCH_ACTIVATION_CM       2000.0f   // CPA 활성화 거리 (20m)
 #define GPS_RESCUE_TOUCH_PROXIMITY_CM        500.0f   // 근접 폴백 (5m)
-#define GPS_RESCUE_CPA_HYSTERESIS_CM          20.0f   // 거리 미분 히스테리시스 (노이즈 필터)
+#define GPS_RESCUE_CPA_HYSTERESIS_CM          20.0f   // 거리 미분 히스테리시스 (cm)
+
+// 내부 sentinel 값 — 사용자 튜닝 불필요, 함수 내부에서 직접 사용
 #define GPS_RESCUE_CPA_RESET_CM          200000.0f   // 터치 감지 후 상태 리셋 sentinel (2km)
 #define GPS_RESCUE_CPA_UNINITIALIZED     -1.0f   // CPA 상태 변수 미초기화 sentinel
 
