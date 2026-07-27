@@ -124,7 +124,6 @@ static float       landingSpeed    = 100.0f; // 최종 착륙 시도 기체 속�
 static float       landingAlt      =   1.0f; // 레스큐 최종 착륙 시도 고도 (Profile3 Yaw d_min), 하강단계에서 천천히 감속해서 도달 할 기체속도
 static float       headingYawGain  =   1.0f; // 헤딩 추적 게인 (Profile3 Yaw F)
 
-// static int8_t      shuttleDirection =    1; // 1: 우측, -1: 좌측
 static gpsLocation_t rescuePointA;   // 하강고도 짝수 A포인트, 이륙방향 하강거리 위치에 생성되어 디스암때까지 레스큐 발동시 홈보다 rescuePointA를 먼저 터치해야함. 목적은 동일 활주로를 이착륙시 공용.
 static gpsLocation_t shuttlePointA;  // 하강고도 홀수 A포인트 ( descentAlt 홀수일때 레스큐시 홈포인트로 귀환 중 하강거리 위치에 생성됨)
 static gpsLocation_t shuttlePointB;  // 셔틀 반환점
@@ -159,7 +158,6 @@ static pt3Filter_t velocityUpsampleLpf;
 
 rescueState_s rescueState;
 
-// 리팩토링으로 공통 함수화된 PID 적분항들
 static float velocityIterm          = 0.0f;
 static float altitudePitchIterm     = 0.0f;
 static float yawHeadingIterm        = 0.0f; // Renamed from yawDescentIterm to match functionality
@@ -198,7 +196,6 @@ void         disarmOnImpact(void);
 void         initialiseRescueValues(void);
 static uint16_t getRescueAuxValue(void);
 
-// 리팩토링 추가 핸들러 및 핼퍼
 static float calculateVelocityThrottle(void);
 static float calculateAltitudePitch(float altErrM, bool isShuttlePhase, bool descentAllowed);
 
@@ -359,7 +356,6 @@ static float calculateVelocityThrottle(void)
 
     float throttleCmd = throttleHover + proportional + velocityIterm + bankBoost;
     // 전체 단계 공통: throttleHover 기준에서 일정 치를 가감하여 쓰로틀 변화
-    // float hoverMin = fmaxf(throttleHover - 150.0f, (float)(gpsRescueConfig()->throttleMin + 10));
     float hoverMin;
      if (rescueState.phase == RESCUE_DESCENT) {
          // 하강 단계에서는 throttleMin까지 감속 허용
