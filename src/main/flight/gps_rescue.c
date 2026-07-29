@@ -1449,15 +1449,21 @@ void gpsRescueUpdate(void)
         isDescentFalling = false;   // Phase 전환 시 급하강 상태 초기화
         descentFallAligned = false; // Phase 전환 시 정렬 상태 초기화
         // 🆕 P1: 셔틀/CPA 상태 변수 초기화 보강 (미션 변수는 missionStop()에서 처리하므로 제외)
-        // shuttleInfinite는 셔틀↔비셔틀 전환 시에만 리셋 (셔틀 간 상호 전환 시 유지)
-        if (!isShuttlePhase(rescueState.phase) || !isShuttlePhase(lastPhase)) {
-            shuttleInfinite = false;
+        // 셔틀 관련 상태는 셔틀 계열 페이즈 간 전환에서는 리셋하지 않기
+        const bool enteringShuttle = isShuttlePhase(rescueState.phase);
+        const bool leavingShuttle  = isShuttlePhase(lastPhase);
+
+        if (!enteringShuttle || !leavingShuttle) {
+            // 셔틀 ↔ 비셔틀 경계를 건널 때만 shuttleInfinite 리셋
+            if (!enteringShuttle) {
+                shuttleInfinite = false;
+            }
+            currentShuttleTrips = 0.0f;
+            shuttleTargetB = false;
+            cpaDistToTargetCm = GPS_RESCUE_CPA_UNINITIALIZED;
+            cpaWasClosing = false;
+            descentAltReached = false;
         }
-        currentShuttleTrips = 0.0f;
-        shuttleTargetB = false;
-        cpaDistToTargetCm = GPS_RESCUE_CPA_UNINITIALIZED;
-        cpaWasClosing = false;
-        descentAltReached = false;
 
         // 하강 단계(DESCENT) 진입 시 landingAlt보다 15미터 이상 높으면 급하강(isDescentFalling) 발동
         if (rescueState.phase == RESCUE_DESCENT && lastPhase != RESCUE_DESCENT) {
