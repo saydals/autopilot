@@ -1655,35 +1655,25 @@ case RESCUE_FLY_HOME:
                     if (missionIsActive()) rescueState.phase = RESCUE_MISSION_FLY_WP;  // 🆕
                 }
 #endif
-                // AUX>=1600(기본 레스큐) 또는 1400~1600 상승엣지 아님(미션)은 셔틀 유지 — 아무 것도 안 함
-                // (기본 레스큐 AUX>=1600은 정상 밴드이므로 셔틀 도중 INITIALIZE 롤백 금지)
+                else if (aux >= 1600) {
+                    // AUX ≥ 1600: 기본 레스큐로 전환 (A포인트/홈포인트 비행 재개)
+                    rescueState.intent.targetAltitudeCm = rescueState.intent.returnAltitudeCm;
+                    rescueState.intent.yawAttenuator = 1.0f;
+                    rescueState.phase = RESCUE_FLY_HOME;
+                    break;
+                }
             }
             break;
 
         case RESCUE_SHUTTLE_INFINITE:
             if (failsafeIsReceivingRxData() && getRescueAuxValue() >= 1400) {
                 gpsRescueResetState();
+                rescueResetMissionBandState();
                 rescueState.phase = RESCUE_INITIALIZE;
             }
             break;
 
         case RESCUE_SHUTTLE_DESCENT:
-            if (failsafeIsReceivingRxData()) {
-                const uint16_t aux = getRescueAuxValue();
-                if (aux < 1400) {
-                    if (!STATE(GPS_FIX_HOME)) { rescueState.failure = RESCUE_NO_HOME_POINT; rescueState.phase = RESCUE_DO_NOTHING; } else { shuttleInfinite = true; initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE; } break;
-                }
-#ifdef USE_FLIGHT_PLAN
-                else if (aux < 1600 && rescueAuxEnteredMissionBand()) {
-                    // 오토파일럿 재진입 (미션 밴드 상승 엣지)
-                    gpsRescueResetState();
-                    rescueResetMissionBandState();
-                    rescueState.phase = RESCUE_INITIALIZE;
-                    break;
-                }
-#endif
-                // AUX>=1600(기본 레스큐)은 셔틀 하강 유지
-            }
 
             // 셔틀 하강 전 구간 하강고도 도달 감지
             if (rescueState.sensor.currentAltitudeCm <= (descentAlt * 100.0f)) {
@@ -1695,22 +1685,6 @@ case RESCUE_FLY_HOME:
             break;
 
         case RESCUE_DESCENT:
-            if (failsafeIsReceivingRxData()) {
-                const uint16_t aux = getRescueAuxValue();
-                if (aux < 1400) {
-                    if (!STATE(GPS_FIX_HOME)) { rescueState.failure = RESCUE_NO_HOME_POINT; rescueState.phase = RESCUE_DO_NOTHING; } else { shuttleInfinite = true; initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE; } break;
-                }
-#ifdef USE_FLIGHT_PLAN
-                else if (aux < 1600 && rescueAuxEnteredMissionBand()) {
-                    // 오토파일럿 재진입 (미션 밴드 상승 엣지)
-                    gpsRescueResetState();
-                    rescueResetMissionBandState();
-                    rescueState.phase = RESCUE_INITIALIZE;
-                    break;
-                }
-#endif
-                // AUX>=1600(기본 레스큐)은 홈 향해 하강 유지
-            }
             // 랜딩 전환 조건: 홈30m이내 + 착륙고도(landingAlt) 모두 만족시 랜딩 시작
             if (rescueState.sensor.distanceToHomeM <= 30.0f && rescueState.sensor.currentAltitudeCm <= (landingAlt * 100.0f)) {
                 rescueState.phase = RESCUE_LANDING;
@@ -1730,12 +1704,14 @@ case RESCUE_FLY_HOME:
                 if (aux < 1400) {
                     // 무한 셔틀로 전환 (미션 취소)
                     missionStop();
+                    rescueResetMissionBandState();  // 🆕 미션 밴드 상태 리셋
                     if (!STATE(GPS_FIX_HOME)) { rescueState.failure = RESCUE_NO_HOME_POINT; rescueState.phase = RESCUE_DO_NOTHING; }
                     else { shuttleInfinite = true; initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE; }
                     break;
                 } else if (aux >= 1600) {
                     // 노말 레스큐로 전환 (미션 취소 → A포인트/홈 비행)
                     missionStop();
+                    rescueResetMissionBandState();  // 🆕 미션 밴드 상태 리셋
                     rescueState.phase = RESCUE_INITIALIZE;
                     break;
                 }
@@ -1770,6 +1746,9 @@ float gpsRescueGetTargetAltitude(void) { return rescueState.intent.targetAltitud
 float gpsRescueGetTargetVelocity(void) { return rescueState.intent.targetVelocityCmS; }
 int32_t gpsRescueGetTargetLat(void) { return currentVCLat; }
 int32_t gpsRescueGetTargetLon(void) { return currentVCLon; }
+bool gpsRescueIsAPointValid(void) { return aPointValid; }
+int32_t gpsRescueGetAPointLat(void) { return rescuePointA.lat; }
+int32_t gpsRescueGetAPointLon(void) { return rescuePointA.lon; }
 uint32_t gpsRescueGetTargetDistance(void) { return rescueState.intent.distanceToTargetCm; }
 int32_t gpsRescueGetTargetDirection(void) { return rescueState.intent.directionToTargetCd; }
 

@@ -160,9 +160,11 @@ void missionStopAndGoHome(void)
     if (STATE(GPS_FIX_HOME)) {
         gpsRescueResetState();
 
+        rescueState.intent.targetVelocityCmS = (float)gpsRescueConfig()->groundSpeedCmS;
+        rescueState.intent.yawAttenuator = 1.0f;
         rescueState.phase = RESCUE_FLY_HOME;
-        currentVCLat = GPS_home[0];
-        currentVCLon = GPS_home[1];
+        currentVCLat = gpsRescueIsAPointValid() ? gpsRescueGetAPointLat() : GPS_home[0];
+        currentVCLon = gpsRescueIsAPointValid() ? gpsRescueGetAPointLon() : GPS_home[1];
         rescueState.intent.targetAltitudeCm = rescueState.intent.returnAltitudeCm;  // 안전 귀환 고도 보장
     } else {
         gpsRescueStartShuttleInfinite();

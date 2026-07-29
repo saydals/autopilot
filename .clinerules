@@ -1,0 +1,15 @@
+# 검색 규칙 (Search Rules)
+
+## 파일 내용 검색
+- 모든 파일 내용 검색은 **`grep` 대신 `rg` (ripgrep)** 를 사용합니다.
+- **`run_commands`** 로 검색을 실행할 때는 항상 `rg` 명령어를 사용하세요.
+- `search_codebase` 도구를 사용할 때는 `rg`를 직접 호출하는 방식으로 대체하는 것을 우선 고려하세요.
+
+## 사용 예시
+- `rg -n "패턴" src/`
+- `rg -n -C 3 "패턴" src/main/`
+- `rg -n -i "패턴" --type c src/`
+
+## 금지
+- `grep` 명령 직접 사용 금지
+- `find ... | xargs grep` 패턴 금지
