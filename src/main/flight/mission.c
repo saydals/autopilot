@@ -91,6 +91,8 @@ static void missionApplyWaypoint(void)
 
 void missionStart(void)
 {
+    missionCompletedFlag = false;
+
     // Rescue 재진입 허용: 하강/착륙/비상이 아니면 Autopilot 재시작 가능
     // (FLY_HOME/ATTAIN_ALT는 gps_rescue.c에서 "Autopilot 재진입" 목적으로 명시적으로
     //  missionStart()를 호출하는 phase이므로 여기서 차단하면 그 호출부가 죽은 코드가 됨)
@@ -203,7 +205,7 @@ void missionUpdateTargetOnly(void)
 
     if (!wpGlideInitialized || currentDistanceCm > wpGlideStartDistanceCm) {
         // 첫 진입 또는 바람 등으로 거리가 늘어난 경우: 현재 고도에서 다시 시작
-        wpGlideStartAltitudeCm = (float)rescueState.intent.targetAltitudeCm;
+        wpGlideStartAltitudeCm = (float)rescueState.sensor.currentAltitudeCm;
         wpGlideStartDistanceCm = currentDistanceCm;
         wpGlideInitialized = true;
     }

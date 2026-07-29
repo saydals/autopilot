@@ -943,14 +943,14 @@ static void rescueAttainPosition(void)
             velocityIterm = 0.0f; altitudePitchIterm = 0.0f; yawHeadingIterm = 0.0f;
             shuttleInfinite = false;
             currentShuttleTrips = 0.0f; shuttleTargetB = false; attainAltStartTime = 0;
-            cpaDistToTargetCm = GPS_RESCUE_CPA_UNINITIALIZED;  // CPA 터치 판정 상태 초기화
+            cpaDistToTargetCm = GPS_RESCUE_CPA_UNINITIALIZED;
             cpaWasClosing     = false;
-            descentAltReached = false;  // [Fix] 레스큐 초기화 시 고도 래치 리셋
+            descentAltReached = false;
             turnDirectionSign = 0;
             prevDistanceToTargetCm = -1.0f;  // sentinel: sensorUpdate()에서 현재 거리로 초기화하여 velocity 스파이크 방지
             // 새 A포인트를 생성하지 않고 낡은 좌표로 비행하는 버그가 발생함.
             if ((int)descentAlt % 2 != 0) {
-                aPointValid = false; 
+                aPointValid = false;
             }
             rescueState.intent.disarmThreshold = gpsRescueConfig()->disarmThreshold * 0.1f;
             rescueState.sensor.imuYawCogGain = 1.0f;
@@ -1324,16 +1324,25 @@ static uint16_t getRescueAuxValue(void)
     return 0;
 }
 
+// 미션 밴드(1400~1600) 진입 검출용 상태 — 파일 스코프로 분리해 rescueResetMissionBandState()에서 리셋 가능
+static bool rescueMissionBandPrev = false; // false: 미션밴드 아님, true: 미션밴드
+
+static void rescueResetMissionBandState(void)
+{
+    rescueMissionBandPrev = false;
+}
+
 // BUG 3/5: 미션 밴드(1400~1600) 상승 엣지에서만 미션 재진입 허용.
 // 매 루프 missionStart() 재호출/토글 진동을 방지하고, 완료 후 밴드 유지 시 자동 재시작되지
 // 않도록 하여 의도적 re-toggle 시에만 미션을 다시 시작하게 함.
+// 단, 레스큐 발동(RESCUE_IDLE 진입) 시 rescueResetMissionBandState()로 prev를 클리어하므로
+// AUX가 이미 1400~1600에 안정적으로 위치한 상태에서 발동해도 최초 1회는 상승 엣지로 인식되어 미션 진입됨.
 static bool rescueAuxEnteredMissionBand(void)
 {
-    static uint8_t prevBand = 0; // 0: 미션밴드 아님, 1: 미션밴드
     const uint16_t aux = getRescueAuxValue();
     const bool inBand = failsafeIsReceivingRxData() && aux >= 1400 && aux < 1600;
-    const bool entered = inBand && prevBand == 0;
-    prevBand = inBand ? 1 : 0;
+    const bool entered = inBand && !rescueMissionBandPrev;
+    rescueMissionBandPrev = inBand;
     return entered;
 }
 
@@ -1350,6 +1359,7 @@ void gpsRescueUpdate(void)
         gpsRescueStop();
     } else if (FLIGHT_MODE(GPS_RESCUE_MODE) && rescueState.phase == RESCUE_IDLE) {
         // 3-way Aux 분기: <1400 셔틀 / 1400~1600 Autopilot / 1600+ Rescue
+        rescueResetMissionBandState(); // 발동 시점에 밴드 상태 클리어 → 안정적 AUX=1500도 최초 1회 미션 진입
         const uint16_t auxVal = getRescueAuxValue();
         if (failsafeIsReceivingRxData() && auxVal < 1400) {
             if (!STATE(GPS_FIX_HOME)) {
@@ -1387,6 +1397,7 @@ void gpsRescueUpdate(void)
         const uint16_t auxVal = getRescueAuxValue();
         if (failsafeIsReceivingRxData() && (auxVal < 1400 || auxVal >= 1600)) {
             missionStop();
+            rescueResetMissionBandState();
             if (auxVal < 1400) {
                 gpsRescueStartShuttleInfinite();
             } else {
@@ -1397,6 +1408,9 @@ void gpsRescueUpdate(void)
         }
         // 🔴 미션 타겟 좌표/고도/속도 설정 (currentVCLat/Lon = WP 좌표, 덮어쓰기 금지)
         missionUpdateTargetOnly();
+        if (newGPSData) {
+            missionCheckAdvance();  // WP 진행: CPA 터치 시 currentMissionWpIndex++ / 마지막 WP에서 홈 귀환
+        }
         if (!missionIsActive()) {
             // BUG 2: 미션 비활성 시 phase를 RESCUE_MISSION_FLY_WP에 고착시키지 않고
             // 홈 귀환으로 전환하여 stale WP로 무한 비행/조종권 미반환을 방지.
@@ -1624,7 +1638,16 @@ case RESCUE_FLY_HOME:
             if (failsafeIsReceivingRxData()) {
                 const uint16_t aux = getRescueAuxValue();
                 if (aux < 1400) {
-                    // 셔틀 유지
+                    // 셔틀 → 무한셔틀 전환
+                    if (!STATE(GPS_FIX_HOME)) {
+                        rescueState.failure = RESCUE_NO_HOME_POINT;
+                        rescueState.phase = RESCUE_DO_NOTHING;
+                    } else {
+                        shuttleInfinite = true;
+                        initShuttlePoints();
+                        rescueState.phase = RESCUE_SHUTTLE_INFINITE;
+                    }
+                    break;
                 }
 #ifdef USE_FLIGHT_PLAN
                 else if (aux < 1600 && rescueAuxEnteredMissionBand()) {  // BUG 3/5: 상승 엣지에서만 재진입
@@ -1632,9 +1655,8 @@ case RESCUE_FLY_HOME:
                     if (missionIsActive()) rescueState.phase = RESCUE_MISSION_FLY_WP;  // 🆕
                 }
 #endif
-                else {
-                    rescueState.phase = RESCUE_INITIALIZE;  // Rescue 재진입
-                }
+                // AUX>=1600(기본 레스큐) 또는 1400~1600 상승엣지 아님(미션)은 셔틀 유지 — 아무 것도 안 함
+                // (기본 레스큐 AUX>=1600은 정상 밴드이므로 셔틀 도중 INITIALIZE 롤백 금지)
             }
             break;
 
@@ -1646,8 +1668,21 @@ case RESCUE_FLY_HOME:
             break;
 
         case RESCUE_SHUTTLE_DESCENT:
-            if (failsafeIsReceivingRxData() && getRescueAuxValue() < 1400) {
-                if (!STATE(GPS_FIX_HOME)) { rescueState.failure = RESCUE_NO_HOME_POINT; rescueState.phase = RESCUE_DO_NOTHING; } else { shuttleInfinite = true; initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE; } break;
+            if (failsafeIsReceivingRxData()) {
+                const uint16_t aux = getRescueAuxValue();
+                if (aux < 1400) {
+                    if (!STATE(GPS_FIX_HOME)) { rescueState.failure = RESCUE_NO_HOME_POINT; rescueState.phase = RESCUE_DO_NOTHING; } else { shuttleInfinite = true; initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE; } break;
+                }
+#ifdef USE_FLIGHT_PLAN
+                else if (aux < 1600 && rescueAuxEnteredMissionBand()) {
+                    // 오토파일럿 재진입 (미션 밴드 상승 엣지)
+                    gpsRescueResetState();
+                    rescueResetMissionBandState();
+                    rescueState.phase = RESCUE_INITIALIZE;
+                    break;
+                }
+#endif
+                // AUX>=1600(기본 레스큐)은 셔틀 하강 유지
             }
 
             // 셔틀 하강 전 구간 하강고도 도달 감지
@@ -1660,8 +1695,21 @@ case RESCUE_FLY_HOME:
             break;
 
         case RESCUE_DESCENT:
-            if (failsafeIsReceivingRxData() && getRescueAuxValue() < 1400) {
-                if (!STATE(GPS_FIX_HOME)) { rescueState.failure = RESCUE_NO_HOME_POINT; rescueState.phase = RESCUE_DO_NOTHING; } else { shuttleInfinite = true; initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE; } break;
+            if (failsafeIsReceivingRxData()) {
+                const uint16_t aux = getRescueAuxValue();
+                if (aux < 1400) {
+                    if (!STATE(GPS_FIX_HOME)) { rescueState.failure = RESCUE_NO_HOME_POINT; rescueState.phase = RESCUE_DO_NOTHING; } else { shuttleInfinite = true; initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE; } break;
+                }
+#ifdef USE_FLIGHT_PLAN
+                else if (aux < 1600 && rescueAuxEnteredMissionBand()) {
+                    // 오토파일럿 재진입 (미션 밴드 상승 엣지)
+                    gpsRescueResetState();
+                    rescueResetMissionBandState();
+                    rescueState.phase = RESCUE_INITIALIZE;
+                    break;
+                }
+#endif
+                // AUX>=1600(기본 레스큐)은 홈 향해 하강 유지
             }
             // 랜딩 전환 조건: 홈30m이내 + 착륙고도(landingAlt) 모두 만족시 랜딩 시작
             if (rescueState.sensor.distanceToHomeM <= 30.0f && rescueState.sensor.currentAltitudeCm <= (landingAlt * 100.0f)) {
@@ -1677,6 +1725,22 @@ case RESCUE_FLY_HOME:
         case RESCUE_ABORT: rescueDoNothingFromGpsFailure = false; rescueState.phase = RESCUE_DO_NOTHING; break;
         case RESCUE_DO_NOTHING: disarmOnImpact(); break;
         case RESCUE_MISSION_FLY_WP:  // BUG 2 백스탑: 미션 비활성이면 홈 귀환으로 전환
+            if (failsafeIsReceivingRxData()) {
+                const uint16_t aux = getRescueAuxValue();
+                if (aux < 1400) {
+                    // 무한 셔틀로 전환 (미션 취소)
+                    missionStop();
+                    if (!STATE(GPS_FIX_HOME)) { rescueState.failure = RESCUE_NO_HOME_POINT; rescueState.phase = RESCUE_DO_NOTHING; }
+                    else { shuttleInfinite = true; initShuttlePoints(); rescueState.phase = RESCUE_SHUTTLE_INFINITE; }
+                    break;
+                } else if (aux >= 1600) {
+                    // 노말 레스큐로 전환 (미션 취소 → A포인트/홈 비행)
+                    missionStop();
+                    rescueState.phase = RESCUE_INITIALIZE;
+                    break;
+                }
+                // 1400~1600(오토파일럿 밴드) 유지 — 미션 계속
+            }
             if (!missionIsActive()) {
                 rescueState.phase = RESCUE_FLY_HOME;
                 currentVCLat = GPS_home[0];
