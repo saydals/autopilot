@@ -1264,6 +1264,7 @@ void gpsRescueResetState(void)
     cpaWasClosing = false;
     descentAltReached = false;
     turnDirectionSign = 0;
+    prevDistanceToTargetCm = -1.0f;  // WP→FLY_HOME 진입 시 센티널 리셋 (velocity 스파이크 방지)
 }
 
 // 무한셔틀 진입 — mission.c 등 외부 모듈에서 호출
