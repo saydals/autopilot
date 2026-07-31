@@ -996,6 +996,40 @@ static void loadSlowState(blackboxSlowState_t *slow)
     slow->rxFlightChannelsValid = rxAreFlightChannelsValid();
 }
 
+#ifdef USE_GPS_RESCUE
+static bool blackboxRescuePointDataChanged(void)
+{
+    static bool initialized = false;
+    static bool previousValid = false;
+    static int32_t previousALat = 0;
+    static int32_t previousALon = 0;
+    static int32_t previousBLat = 0;
+    static int32_t previousBLon = 0;
+
+    const bool valid = gpsRescueIsAPointValid();
+    const int32_t aLat = valid ? gpsRescueGetAPointLat() : 0;
+    const int32_t aLon = valid ? gpsRescueGetAPointLon() : 0;
+    const int32_t bLat = valid ? gpsRescueGetBPointLat() : 0;
+    const int32_t bLon = valid ? gpsRescueGetBPointLon() : 0;
+
+    const bool changed = !initialized
+        || valid != previousValid
+        || aLat != previousALat
+        || aLon != previousALon
+        || bLat != previousBLat
+        || bLon != previousBLon;
+
+    initialized = true;
+    previousValid = valid;
+    previousALat = aLat;
+    previousALon = aLon;
+    previousBLat = bLat;
+    previousBLon = bLon;
+
+    return changed;
+}
+#endif
+
 /**
  * If the data in the slow frame has changed, log a slow frame.
  *
@@ -1006,6 +1040,9 @@ STATIC_UNIT_TESTED bool writeSlowFrameIfNeeded(void)
 {
     // Write the slow frame peridocially so it can be recovered if we ever lose sync
     bool shouldWrite = blackboxSlowFrameIterationTimer >= blackboxSInterval;
+#ifdef USE_GPS_RESCUE
+    shouldWrite = shouldWrite || blackboxRescuePointDataChanged();
+#endif
 
     if (shouldWrite) {
         loadSlowState(&slowHistory);
