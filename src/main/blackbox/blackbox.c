@@ -69,6 +69,9 @@
 #include "flight/servos.h"
 #include "flight/gps_rescue.h"
 #include "flight/position.h"
+#ifdef USE_FLIGHT_PLAN
+#include "flight/mission.h"
+#endif
 
 #include "io/beeper.h"
 #include "io/gps.h"
@@ -279,13 +282,19 @@ static const blackboxConditionalFieldDefinition_t blackboxGpsGFields[] = {
     {"GPS_coord",          1, SIGNED,   PREDICT(HOME_COORD), ENCODING(SIGNED_VB),   CONDITION(ALWAYS)},
     {"GPS_altitude",      -1, SIGNED,   PREDICT(0),          ENCODING(SIGNED_VB),   CONDITION(ALWAYS)},
     {"GPS_speed",         -1, UNSIGNED, PREDICT(0),          ENCODING(UNSIGNED_VB), CONDITION(ALWAYS)},
-    {"GPS_ground_course", -1, UNSIGNED, PREDICT(0),          ENCODING(UNSIGNED_VB), CONDITION(ALWAYS)}
+    {"GPS_ground_course", -1, UNSIGNED, PREDICT(0),          ENCODING(UNSIGNED_VB), CONDITION(ALWAYS)},
+    {"GPS_velned",         0, SIGNED,   PREDICT(0),          ENCODING(SIGNED_VB),   CONDITION(ALWAYS)},
+    {"GPS_velned",         1, SIGNED,   PREDICT(0),          ENCODING(SIGNED_VB),   CONDITION(ALWAYS)},
+    {"GPS_velned",         2, SIGNED,   PREDICT(0),          ENCODING(SIGNED_VB),   CONDITION(ALWAYS)},
+    {"GPS_time",          -1, UNSIGNED, PREDICT(0),          ENCODING(UNSIGNED_VB), CONDITION(ALWAYS)}
 };
 
 // GPS home frame
 static const blackboxSimpleFieldDefinition_t blackboxGpsHFields[] = {
     {"GPS_home",           0, SIGNED,   PREDICT(0),          ENCODING(SIGNED_VB)},
-    {"GPS_home",           1, SIGNED,   PREDICT(0),          ENCODING(SIGNED_VB)}
+    {"GPS_home",           1, SIGNED,   PREDICT(0),          ENCODING(SIGNED_VB)},
+    {"GPS_home",           2, SIGNED,   PREDICT(0),          ENCODING(SIGNED_VB)},
+    {"GPS_home_epoch",    -1, UNSIGNED, PREDICT(0),          ENCODING(UNSIGNED_VB)}
 };
 #endif
 
@@ -297,6 +306,62 @@ static const blackboxSimpleFieldDefinition_t blackboxSlowFields[] = {
     {"failsafePhase",         -1, UNSIGNED, PREDICT(0),      ENCODING(TAG2_3S32)},
     {"rxSignalReceived",      -1, UNSIGNED, PREDICT(0),      ENCODING(TAG2_3S32)},
     {"rxFlightChannelsValid", -1, UNSIGNED, PREDICT(0),      ENCODING(TAG2_3S32)}
+#ifdef USE_FLIGHT_PLAN
+    ,{"GPS_wp_count",         -1, UNSIGNED, PREDICT(0),      ENCODING(UNSIGNED_VB)}
+    ,{"GPS_wp_0_lat",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_0_lon",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_0_alt",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_1_lat",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_1_lon",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_1_alt",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_2_lat",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_2_lon",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_2_alt",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_3_lat",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_3_lon",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_3_alt",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_4_lat",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_4_lon",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_4_alt",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_5_lat",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_5_lon",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_5_alt",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_6_lat",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_6_lon",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_6_alt",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_7_lat",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_7_lon",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_7_alt",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_8_lat",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_8_lon",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_8_alt",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_9_lat",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_9_lon",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_9_alt",         -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_10_lat",        -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_10_lon",        -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_10_alt",        -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_11_lat",        -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_11_lon",        -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_11_alt",        -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_12_lat",        -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_12_lon",        -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_12_alt",        -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_13_lat",        -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_13_lon",        -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_13_alt",        -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_14_lat",        -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_14_lon",        -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_wp_14_alt",        -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+#endif
+#ifdef USE_GPS_RESCUE
+    ,{"GPS_A_lat",            -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_A_lon",            -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_A_alt",            -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_B_lat",            -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_B_lon",            -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+    ,{"GPS_B_alt",            -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)}
+#endif
 };
 
 typedef enum BlackboxState {
@@ -355,8 +420,8 @@ typedef struct blackboxMainState_s {
 } blackboxMainState_t;
 
 typedef struct blackboxGpsState_s {
-    int32_t GPS_home[2];
-    int32_t GPS_coord[2];
+    gpsLocation_t GPS_home;
+    gpsLocation_t GPS_coord;
     uint8_t GPS_numSat;
 } blackboxGpsState_t;
 
@@ -891,6 +956,31 @@ static void writeSlowFrame(void)
     values[2] = slowHistory.rxFlightChannelsValid ? 1 : 0;
     blackboxWriteTag2_3S32(values);
 
+#ifdef USE_FLIGHT_PLAN
+    const uint8_t waypointCount = missionWpCount > MAX_MISSION_WAYPOINTS ? MAX_MISSION_WAYPOINTS : missionWpCount;
+    blackboxWriteUnsignedVB(waypointCount);
+    for (uint8_t i = 0; i < MAX_MISSION_WAYPOINTS; i++) {
+        const bool valid = i < waypointCount;
+        blackboxWriteSignedVB(valid ? missionWaypoints[i].latitude : 0);
+        blackboxWriteSignedVB(valid ? missionWaypoints[i].longitude : 0);
+        blackboxWriteSignedVB(valid ? lrintf(missionWaypoints[i].altitude) : 0);
+    }
+#endif
+
+#ifdef USE_GPS_RESCUE
+    const bool aPointValid = gpsRescueIsAPointValid();
+    const int32_t aPointLat = aPointValid ? gpsRescueGetAPointLat() : 0;
+    const int32_t aPointLon = aPointValid ? gpsRescueGetAPointLon() : 0;
+    const int32_t bPointLat = aPointValid ? gpsRescueGetBPointLat() : 0;
+    const int32_t bPointLon = aPointValid ? gpsRescueGetBPointLon() : 0;
+    blackboxWriteSignedVB(aPointLat);
+    blackboxWriteSignedVB(aPointLon);
+    blackboxWriteSignedVB(aPointValid ? lrintf(gpsRescueGetTargetAltitude()) : 0);
+    blackboxWriteSignedVB(bPointLat);
+    blackboxWriteSignedVB(bPointLon);
+    blackboxWriteSignedVB(aPointValid ? lrintf(gpsRescueGetTargetAltitude()) : 0);
+#endif
+
     blackboxSlowFrameIterationTimer = 0;
 }
 
@@ -1084,12 +1174,12 @@ static void writeGPSHomeFrame(void)
 {
     blackboxWrite('H');
 
-    blackboxWriteSignedVB(GPS_home[0]);
-    blackboxWriteSignedVB(GPS_home[1]);
-    //TODO it'd be great if we could grab the GPS current time and write that too
+    blackboxWriteSignedVB(GPS_home_llh.lat);
+    blackboxWriteSignedVB(GPS_home_llh.lon);
+    blackboxWriteSignedVB(GPS_home_llh.altCm / 10); // log homes altitude, in increments of 0.1m
+    blackboxWriteUnsignedVB(gpsDateTimeToEpoch(&gpsSol.dateTime));
 
-    gpsHistory.GPS_home[0] = GPS_home[0];
-    gpsHistory.GPS_home[1] = GPS_home[1];
+    gpsHistory.GPS_home = GPS_home_llh;
 }
 
 static void writeGPSFrame(timeUs_t currentTimeUs)
@@ -1108,15 +1198,26 @@ static void writeGPSFrame(timeUs_t currentTimeUs)
     }
 
     blackboxWriteUnsignedVB(gpsSol.numSat);
-    blackboxWriteSignedVB(gpsSol.llh.lat - gpsHistory.GPS_home[GPS_LATITUDE]);
-    blackboxWriteSignedVB(gpsSol.llh.lon - gpsHistory.GPS_home[GPS_LONGITUDE]);
+    blackboxWriteSignedVB(gpsSol.llh.lat - gpsHistory.GPS_home.lat);
+    blackboxWriteSignedVB(gpsSol.llh.lon - gpsHistory.GPS_home.lon);
     blackboxWriteSignedVB(gpsSol.llh.altCm / 10);  // log altitude in increments of 0.1m
-    blackboxWriteUnsignedVB(gpsSol.groundSpeed);
+
+    if (gpsConfig()->gps_use_3d_speed) {
+        blackboxWriteUnsignedVB(gpsSol.speed3d);
+    } else {
+        blackboxWriteUnsignedVB(gpsSol.groundSpeed);
+    }
+
     blackboxWriteUnsignedVB(gpsSol.groundCourse);
 
+    blackboxWriteSignedVB(gpsSol.velned.velN);
+    blackboxWriteSignedVB(gpsSol.velned.velE);
+    blackboxWriteSignedVB(gpsSol.velned.velD);
+
+    blackboxWriteUnsignedVB(gpsSol.time);
+
     gpsHistory.GPS_numSat = gpsSol.numSat;
-    gpsHistory.GPS_coord[GPS_LATITUDE] = gpsSol.llh.lat;
-    gpsHistory.GPS_coord[GPS_LONGITUDE] = gpsSol.llh.lon;
+    gpsHistory.GPS_coord = gpsSol.llh;
 }
 #endif
 
@@ -1768,7 +1869,8 @@ STATIC_UNIT_TESTED bool blackboxShouldLogIFrame(void)
 #ifdef USE_GPS
 STATIC_UNIT_TESTED bool blackboxShouldLogGpsHomeFrame(void)
 {
-    if ((GPS_home[0] != gpsHistory.GPS_home[0] || GPS_home[1] != gpsHistory.GPS_home[1]
+    if ((GPS_home_llh.lat != gpsHistory.GPS_home.lat
+         || GPS_home_llh.lon != gpsHistory.GPS_home.lon
         || (blackboxPFrameIndex == blackboxIInterval / 2 && blackboxIFrameIndex % 128 == 0)) && isFieldEnabled(FIELD_SELECT(GPS))) {
         return true;
     }
@@ -1826,8 +1928,8 @@ STATIC_UNIT_TESTED void blackboxLogIteration(timeUs_t currentTimeUs)
                 writeGPSHomeFrame();
                 writeGPSFrame(currentTimeUs);
             } else if (gpsSol.numSat != gpsHistory.GPS_numSat
-                    || gpsSol.llh.lat != gpsHistory.GPS_coord[GPS_LATITUDE]
-                    || gpsSol.llh.lon != gpsHistory.GPS_coord[GPS_LONGITUDE]) {
+                       || gpsSol.llh.lat != gpsHistory.GPS_coord.lat
+                       || gpsSol.llh.lon != gpsHistory.GPS_coord.lon) {
                 //We could check for velocity changes as well but I doubt it changes independent of position
                 writeGPSFrame(currentTimeUs);
             }

@@ -172,6 +172,8 @@ float         gpsRescueGetImuYawCogGain(void);
 bool          gpsRescueIsAPointValid(void);
 int32_t       gpsRescueGetAPointLat(void);
 int32_t       gpsRescueGetAPointLon(void);
+int32_t       gpsRescueGetBPointLat(void);
+int32_t       gpsRescueGetBPointLon(void);
 uint16_t      gpsRescueGetCurrentShuttleTrips(void);
 
 // 공통 CPA 터치 판정 — 셔틀/WP/FLY_HOME에서 재사용
