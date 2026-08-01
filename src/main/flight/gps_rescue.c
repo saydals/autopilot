@@ -1755,6 +1755,8 @@ int32_t gpsRescueGetTargetLon(void) { return currentVCLon; }
 bool gpsRescueIsAPointValid(void) { return aPointValid; }
 int32_t gpsRescueGetAPointLat(void) { return rescuePointA.lat; }
 int32_t gpsRescueGetAPointLon(void) { return rescuePointA.lon; }
+int32_t gpsRescueGetBPointLat(void) { return shuttlePointB.lat; }
+int32_t gpsRescueGetBPointLon(void) { return shuttlePointB.lon; }
 uint32_t gpsRescueGetTargetDistance(void) { return rescueState.intent.distanceToTargetCm; }
 int32_t gpsRescueGetTargetDirection(void) { return rescueState.intent.directionToTargetCd; }
 

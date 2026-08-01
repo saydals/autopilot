@@ -228,6 +228,23 @@ typedef struct gpsLocation_s {
     int32_t altCm;                  // altitude in 0.01m
 } gpsLocation_t;
 
+typedef struct gpsVelned_s {
+    int16_t velN;       // cm/s
+    int16_t velE;       // cm/s
+    int16_t velD;       // cm/s
+} gpsVelned_t;
+
+typedef struct gpsDateTime_s {
+    uint16_t year;
+    uint8_t month;
+    uint8_t day;
+    uint8_t hour;
+    uint8_t min;
+    uint8_t sec;
+    uint16_t millis;
+    bool valid;                     // true when date/time are valid from GPS
+} gpsDateTime_t;
+
 /* A value below 100 means great accuracy is possible with GPS satellite constellation */
 typedef struct gpsDilution_s {
     uint16_t pdop;                  // positional DOP - 3D (* 100)
@@ -250,6 +267,8 @@ typedef struct gpsSolutionData_s {
     uint16_t groundSpeed;           // speed in 0.1m/s
     uint16_t groundCourse;          // degrees * 10
     uint8_t numSat;
+    gpsVelned_t velned;
+    gpsDateTime_t dateTime;         // GPS date/time from NAV-PVT
     uint32_t time;                  // GPS msToW
     uint32_t navIntervalMs;         // interval between nav solutions in ms
 } gpsSolutionData_t;
@@ -299,6 +318,7 @@ typedef struct gpsData_s {
 } gpsData_t;
 
 extern int32_t GPS_home[2];
+extern gpsLocation_t GPS_home_llh;              // home location as struct for blackbox logging
 extern uint16_t GPS_distanceToHome;             // distance to home point in meters
 extern uint32_t GPS_distanceToHomeCm;           // distance to home point in cm
 extern int16_t GPS_directionToHome;             // direction to home or hol point in degrees
@@ -313,6 +333,8 @@ typedef enum {
 
 extern gpsData_t gpsData;
 extern gpsSolutionData_t gpsSol;
+
+uint32_t gpsDateTimeToEpoch(const gpsDateTime_t *dt);
 
 #define GPS_SV_MAXSATS_LEGACY   16U
 #define GPS_SV_MAXSATS_M8N      32U
