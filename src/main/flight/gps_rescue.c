@@ -92,8 +92,6 @@
 
 #define MAX_PITCH_SHUTTLE_DEG                15.0f // 셔틀 단계 최대 피치각
 #define MAX_PITCH_FLYHOME_DEG                20.0f // 귀환 단계 최대 피치각 
-#define MAX_ROLL_DEG                         75.0f
-
 #define DESCENT_HOME_TRACK_ALT_M             5.0f
 
 
@@ -234,19 +232,25 @@ bool gpsRescueCPATouchCheck(float dCm, float activationThresholdCm, float proxim
         // 근접 폴백: proximityCeilCm 이내 도달 = 즉시 터치
         touched = true;
     } else if (dCm < activationThresholdCm) {
-        if (*pCpDist < GPS_RESCUE_CPA_UNINITIALIZED) {
+        if (*pCpDist <= GPS_RESCUE_CPA_UNINITIALIZED || *pCpDist >= GPS_RESCUE_CPA_RESET_CM) {
             // 첫 진입: 상태 초기화
             *pCpDist = dCm;
             *pCpClosing = true;
         } else {
-            // 20cm 히스테리시스로 노이즈 내성 강화
-            bool isClosing = (dCm < *pCpDist - GPS_RESCUE_CPA_HYSTERESIS_CM);
-            if (!isClosing && *pCpClosing) {
-                touched = true; // 거리 감소→증가 전환 = 최근접점 통과
+            // 20cm 히스테리시스로 노이즈 내성 강화.
+            // pCpDist는 직전 거리가 아니라 활성화 이후의 최저 거리(CPA 후보)를
+            // 유지한다. 그래야 아주 느린 선회에서도 작은 거리 변화가 누적되어
+            // 최저점 이후 20cm 이상 멀어지는 순간을 검출할 수 있다.
+            if (dCm < *pCpDist - GPS_RESCUE_CPA_HYSTERESIS_CM) {
+                *pCpDist = dCm;
+                *pCpClosing = true;
+            } else if (dCm > *pCpDist + GPS_RESCUE_CPA_HYSTERESIS_CM) {
+                if (*pCpClosing) {
+                    touched = true; // 거리 감소→증가 전환 = 최근접점 통과
+                }
+                *pCpClosing = false;
             }
-            *pCpClosing = isClosing;
         }
-        *pCpDist = dCm;
     }
 
     if (touched) {
@@ -566,7 +570,7 @@ static void handleShuttleProgress(void)
 
 
 
-    targetBankDeg = constrainf(targetBankDeg, -MAX_ROLL_DEG, MAX_ROLL_DEG);
+    targetBankDeg = constrainf(targetBankDeg, -(float)gpsRescueConfig()->bankLimit, (float)gpsRescueConfig()->bankLimit);
     gpsRescueAngle[AI_ROLL] = targetBankDeg * 100.0f;
 
     // Yaw 제어
@@ -650,7 +654,7 @@ static void handleDescentPhase(void)
             if (!descentFallAligned) {
                 // [정렬 단계] 45도 이내로 들어올 때까지 Fly home 제어 사용
                 float targetBankDeg = -(headingError * bankGain);
-                targetBankDeg = constrainf(targetBankDeg, -MAX_ROLL_DEG, MAX_ROLL_DEG);
+                targetBankDeg = constrainf(targetBankDeg, -(float)gpsRescueConfig()->bankLimit, (float)gpsRescueConfig()->bankLimit);
                 gpsRescueAngle[AI_ROLL] = targetBankDeg * 100.0f;
 
                 if (absError < HEADING_HYST_LOW_DEG) {
@@ -706,7 +710,7 @@ static void handleDescentPhase(void)
                 // 홈 방향 추적 (롤/요/쓰로틀)
                 float headingError = rescueState.sensor.errorAngle;
                 float targetBankDeg = -(headingError * bankGain);
-                targetBankDeg = constrainf(targetBankDeg, -MAX_ROLL_DEG, MAX_ROLL_DEG);
+                targetBankDeg = constrainf(targetBankDeg, -(float)gpsRescueConfig()->bankLimit, (float)gpsRescueConfig()->bankLimit);
                 gpsRescueAngle[AI_ROLL] = targetBankDeg * 100.0f;
 
                 rescueYaw = (headingError * gpsRescueConfig()->yawP / 10.0f) * headingYawGain;
@@ -731,7 +735,7 @@ static void handleDescentPhase(void)
     // 정상 하강 단계 (헤딩 정렬이 끝났거나 급하강이 필요 없는 경우)
     float headingError = rescueState.sensor.errorAngle;
     float targetBankDeg = -(headingError * bankGain);
-    targetBankDeg = constrainf(targetBankDeg, -MAX_ROLL_DEG, MAX_ROLL_DEG);
+    targetBankDeg = constrainf(targetBankDeg, -(float)gpsRescueConfig()->bankLimit, (float)gpsRescueConfig()->bankLimit);
     gpsRescueAngle[AI_ROLL] = targetBankDeg * 100.0f;
     
     rescueYaw = (headingError * gpsRescueConfig()->yawP / 10.0f) * headingYawGain;

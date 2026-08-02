@@ -68,6 +68,7 @@ PG_RESET_TEMPLATE(gpsRescueConfig_t, gpsRescueConfig,
     .useMag = GPS_RESCUE_USE_MAG,
     .imuYawGain = 10,
     .descentBankLimit = 15,
+    .bankLimit = 75,
 );
 
 #endif // USE_GPS_RESCUE

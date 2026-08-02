@@ -172,6 +172,7 @@
 #define PARAM_NAME_GPS_RESCUE_PITCH_CUTOFF "gps_rescue_pitch_cutoff"
 #define PARAM_NAME_GPS_RESCUE_IMU_YAW_GAIN "gps_rescue_imu_yaw_gain"
 #define PARAM_NAME_GPS_RESCUE_DESCENT_BANK "gps_rescue_descent_bank"
+#define PARAM_NAME_GPS_RESCUE_BANK_LIMIT "gps_rescue_bank_limit"
 
 #define PARAM_NAME_GPS_RESCUE_DESCENT_DIST "gps_rescue_descent_dist"
 #define PARAM_NAME_GPS_RESCUE_DESCEND_RATE "gps_rescue_descend_rate"
