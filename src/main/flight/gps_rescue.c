@@ -812,7 +812,7 @@ static void handleMissionPhase(void)
 
     // 뱅크턴: 헤딩 오차에 비례하여 기체를 눕힘
     float targetBankDeg = -(headingError * bankGain);
-    targetBankDeg = constrainf(targetBankDeg, -75.0f, 75.0f);
+    targetBankDeg = constrainf(targetBankDeg, -(float)gpsRescueConfig()->bankLimit, (float)gpsRescueConfig()->bankLimit);
     gpsRescueAngle[AI_ROLL] = targetBankDeg * 100.0f;
 
     // Yaw 제어: 미세 헤딩 보정(PI) 또는 큰 헤딩 시 조화 선회 보조
@@ -868,7 +868,7 @@ static void handleFlyHomePhase(void)
 
     // 뱅크턴: 헤딩 오차에 비례하여 기체를 눕힘 (bankGain 0.01 적용됨)
     float targetBankDeg = -(headingError * bankGain);
-    targetBankDeg = constrainf(targetBankDeg, -75.0f, 75.0f);
+    targetBankDeg = constrainf(targetBankDeg, -(float)gpsRescueConfig()->bankLimit, (float)gpsRescueConfig()->bankLimit);
     gpsRescueAngle[AI_ROLL] = targetBankDeg * 100.0f;
 
     // Yaw 제어: 미세 헤딩 보정(PI) 또는 큰 헤딩 시 조화 선회 보조
