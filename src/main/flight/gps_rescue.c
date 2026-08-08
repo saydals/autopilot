@@ -1458,15 +1458,16 @@ void gpsRescueUpdate(void)
         const bool leavingShuttle  = isShuttlePhase(lastPhase);
 
         if (!enteringShuttle || !leavingShuttle) {
-            // 셔틀 ↔ 비셔틀 경계를 건널 때만 shuttleInfinite 리셋
             if (!enteringShuttle) {
                 shuttleInfinite = false;
             }
-            currentShuttleTrips = 0.0f;
-            shuttleTargetB = false;
-            cpaDistToTargetCm = GPS_RESCUE_CPA_UNINITIALIZED;
-            cpaWasClosing = false;
-            descentAltReached = false;
+            if (!enteringShuttle) {
+                currentShuttleTrips = 0.0f;
+                shuttleTargetB = false;
+                cpaDistToTargetCm = GPS_RESCUE_CPA_UNINITIALIZED;
+                cpaWasClosing = false;
+                descentAltReached = false;
+            }
         }
 
         // 하강 단계(DESCENT) 진입 시 landingAlt보다 15미터 이상 높으면 급하강(isDescentFalling) 발동
